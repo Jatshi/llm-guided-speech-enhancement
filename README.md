@@ -88,12 +88,11 @@ The demo exposes a text mode for inspecting prescriptions and an audio mode that
 
 ## Model Files
 
-The model repository is [jatshi/llm-guided-speech-enhancement](https://huggingface.co/jatshi/llm-guided-speech-enhancement). It contains two LoRA adapters, not the Qwen base weights:
+The model repository is [jatshi/llm-guided-speech-enhancement](https://huggingface.co/jatshi/llm-guided-speech-enhancement). It hosts the final DPO LoRA adapter, not the Qwen base weights:
 
 | Folder | Stage | Use |
 | --- | --- | --- |
-| `dpo-adapter/` | DPO | Recommended adapter for the demo and inference. |
-| `sft-adapter/` | SFT | Supervised fine-tuning checkpoint before preference optimization. |
+| `dpo-adapter/` | DPO | Recommended final adapter for the demo and inference. |
 
 Load an adapter with PEFT:
 

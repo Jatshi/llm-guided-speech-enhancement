@@ -11,7 +11,7 @@ tags:
 
 # LLM-Guided Speech Enhancement adapters
 
-This repository hosts LoRA adapters for **LLM-Guided Speech Enhancement**. The recommended `dpo-adapter/` is based on `Qwen/Qwen2.5-7B-Instruct`; `sft-adapter/` is the checkpoint before DPO.
+This repository hosts the final LoRA adapter for **LLM-Guided Speech Enhancement**. The `dpo-adapter/` checkpoint is based on `Qwen/Qwen2.5-7B-Instruct`.
 
 ## Intended use
 
