@@ -28,5 +28,5 @@ jobs:
           python -c "from lse_v2.config import load_config;
           load_config('configs/autodl_4090.json');
           print('CONFIG_OK')"
-      - run: pytest
+      - run: python -m pytest
       - run: python -m pip wheel --no-deps --wheel-dir dist .
