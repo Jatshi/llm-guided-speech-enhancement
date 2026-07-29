@@ -1,0 +1,11 @@
+run_id,git_commit,stage,profile,world_size,model,seed,train_samples,steps,peak_gpu_memory_gb,peak_cpu_memory_gb,elapsed_seconds,mean_step_seconds,tokens_per_second,samples_per_second,final_eval_metric,status,notes
+TODO-no-ds-sft,,sft,no_deepspeed,1,Qwen/Qwen2.5-1.5B-Instruct,42,,,,,,,,,,pending,"Fill only after a real GPU run"
+TODO-zero2-sft,,sft,zero2,1,Qwen/Qwen2.5-1.5B-Instruct,42,,,,,,,,,,pending,"world_size=1; no cross-GPU sharding benefit"
+TODO-zero3-offload-sft,,sft,zero3_cpu_offload,1,Qwen/Qwen2.5-1.5B-Instruct,42,,,,,,,,,,pending,"Expected memory-for-throughput trade; measure, do not assume"
+TODO-no-ds-dpo,,dpo,no_deepspeed,1,Qwen/Qwen2.5-1.5B-Instruct,42,,,,,,,,,,pending,"Fill only after a real GPU run"
+TODO-zero2-dpo,,dpo,zero2,1,Qwen/Qwen2.5-1.5B-Instruct,42,,,,,,,,,,pending,"world_size=1; no cross-GPU sharding benefit"
+TODO-zero3-offload-dpo,,dpo,zero3_cpu_offload,1,Qwen/Qwen2.5-1.5B-Instruct,42,,,,,,,,,,pending,"Expected memory-for-throughput trade; measure, do not assume"
+TODO-no-ds-grpo,,grpo,no_deepspeed,1,Qwen/Qwen2.5-1.5B-Instruct,42,,,,,,,,,,pending,"Fill only after a real GPU run"
+TODO-zero2-grpo,,grpo,zero2,1,Qwen/Qwen2.5-1.5B-Instruct,42,,,,,,,,,,pending,"world_size=1; no cross-GPU sharding benefit"
+TODO-zero3-offload-grpo,,grpo,zero3_cpu_offload,1,Qwen/Qwen2.5-1.5B-Instruct,42,,,,,,,,,,pending,"Expected memory-for-throughput trade; measure, do not assume"
+

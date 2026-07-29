@@ -1,7 +1,4 @@
-"""Backward-compatible SFT entry point.
-
-Prefer: python -m lse_v2.training --config configs/autodl_4090.json --stage sft
-"""
+"""Backward-compatible GRPO entry point."""
 
 from __future__ import annotations
 
@@ -22,7 +19,7 @@ def main() -> None:
         json.dumps(
             train_stage(
                 args.config,
-                "sft",
+                "grpo",
                 dry_run=args.dry_run,
                 resume_mode=args.resume,
                 deepspeed_override=args.deepspeed,

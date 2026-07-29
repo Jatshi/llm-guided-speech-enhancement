@@ -1,0 +1,119 @@
+{
+  "project": {
+    "name": "lse-v2-autodl-4090",
+    "root": "..",
+    "seed": 42
+  },
+  "model": {
+    "name_or_path": "Qwen/Qwen2.5-1.5B-Instruct",
+    "dtype": "bfloat16",
+    "device_map": "auto",
+    "trust_remote_code": true,
+    "lora": {
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.05,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    }
+  },
+  "data": {
+    "audio_manifest": "data/training/audio_manifest.v2.jsonl",
+    "sft_train": "data/v2/sft/train.jsonl",
+    "sft_eval": "data/v2/sft/eval.jsonl",
+    "dpo_train": "data/v2/dpo/train.jsonl",
+    "dpo_eval": "data/v2/dpo/eval.jsonl",
+    "grpo_train": "data/v2/grpo/train.jsonl",
+    "grpo_eval": "data/v2/grpo/eval.jsonl"
+  },
+  "training": {
+    "pipeline_status": "outputs/v2/pipeline_status.json",
+    "stage_inputs": {
+      "dpo": "outputs/v2/sft/final",
+      "grpo": "outputs/v2/dpo/final"
+    },
+    "stages": {
+      "sft": {
+        "deepspeed": "configs/deepspeed/ds_zero2.json",
+        "output_dir": "outputs/v2/sft",
+        "num_train_epochs": 1,
+        "max_steps": -1,
+        "per_device_train_batch_size": 8,
+        "per_device_eval_batch_size": 2,
+        "gradient_accumulation_steps": 2,
+        "learning_rate": 0.0002,
+        "max_length": 1024,
+        "packing": false,
+        "warmup_ratio": 0.03,
+        "logging_steps": 5,
+        "eval_strategy": "epoch",
+        "eval_steps": 1000,
+        "save_steps": 500,
+        "save_total_limit": 2,
+        "gradient_checkpointing": true,
+        "dataloader_num_workers": 2,
+        "report_to": ["tensorboard"]
+      },
+      "dpo": {
+        "deepspeed": "configs/deepspeed/ds_zero2.json",
+        "output_dir": "outputs/v2/dpo",
+        "num_train_epochs": 1,
+        "max_steps": -1,
+        "per_device_train_batch_size": 8,
+        "per_device_eval_batch_size": 2,
+        "gradient_accumulation_steps": 2,
+        "learning_rate": 0.000005,
+        "beta": 0.01,
+        "label_smoothing": 0.1,
+        "max_length": 1024,
+        "max_prompt_length": 768,
+        "warmup_ratio": 0.03,
+        "logging_steps": 5,
+        "eval_strategy": "epoch",
+        "eval_steps": 1000,
+        "save_steps": 500,
+        "save_total_limit": 2,
+        "gradient_checkpointing": true,
+        "dataloader_num_workers": 2,
+        "report_to": ["tensorboard"]
+      },
+      "grpo": {
+        "deepspeed": "configs/deepspeed/ds_zero2.json",
+        "output_dir": "outputs/v2/grpo",
+        "num_train_epochs": 1,
+        "max_steps": 300,
+        "per_device_train_batch_size": 4,
+        "per_device_eval_batch_size": 2,
+        "gradient_accumulation_steps": 4,
+        "learning_rate": 0.00001,
+        "beta": 0.04,
+        "num_generations": 2,
+        "max_prompt_length": 768,
+        "max_completion_length": 256,
+        "temperature": 0.7,
+        "warmup_ratio": 0.03,
+        "logging_steps": 1,
+        "eval_strategy": "no",
+        "eval_steps": 300,
+        "save_steps": 50,
+        "save_total_limit": 2,
+        "gradient_checkpointing": true,
+        "dataloader_num_workers": 1,
+        "report_to": ["tensorboard"]
+      }
+    }
+  },
+  "evaluation": {
+    "predictions": "outputs/v2/evaluation/predictions.jsonl",
+    "report": "outputs/v2/evaluation/reward_report.json",
+    "max_samples": 200,
+    "max_new_tokens": 256
+  }
+}

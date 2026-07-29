@@ -1,0 +1,53 @@
+{
+  "schema_version": "light.passport.v1",
+  "project": "LLM-Guided Speech Enhancement 2.0",
+  "stage": "gpu-full-chain-running",
+  "entrypoints": {
+    "preflight": "scripts/autodl_v2_preflight.sh",
+    "bootstrap": "scripts/autodl_v2_bootstrap.sh",
+    "run": "scripts/autodl_v2_run.sh"
+  },
+  "modes": ["smoke", "full"],
+  "training_stages": ["sft", "dpo", "grpo"],
+  "deepspeed": {
+    "version": "0.16.3",
+    "default_profile": "configs/deepspeed/ds_zero2.json",
+    "fallback_profile": "configs/deepspeed/ds_zero3_offload.json",
+    "declared_world_size": 1,
+    "single_gpu_sharding_benefit_claimed": false,
+    "multi_gpu_validated": false,
+    "comparison_template": "docs/deepspeed_comparison_template.csv"
+  },
+  "default_model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "hardware_target": "single RTX 4090 24GB",
+  "local_gates": [
+    "python -m compileall -q lse_v2 src",
+    "python -m pytest  # 33 passed",
+    "python -m ruff check .",
+    "python -m ruff format --check .",
+    "python scripts/distributed_contract_smoke.py --world-size 2"
+  ],
+  "gpu_validation": {
+    "status": "running",
+    "reason": "Full SFT completed; conservative DPO is running; GRPO and the four-stage matrix are queued",
+    "completed_evidence": [
+      "RTX 4090 CUDA preflight passed",
+      "114000-row SFT completed at world_size=1 with DeepSpeed ZeRO-2",
+      "SFT train loss 0.09630 and held-out loss 0.08168",
+      "SFT held-out token accuracy 0.96517",
+      "cDPO beta=0.01 and label_smoothing=0.1 finite-margin behavior verified in the live run"
+    ],
+    "required_evidence": [
+      "DPO and GRPO stage manifests with complete status",
+      "final peak VRAM and elapsed time audit",
+      "base/SFT/DPO/GRPO saved model predictions",
+      "machine-readable reward and ablation reports",
+      "public Hugging Face adapter and audited model card"
+    ]
+  },
+  "truthfulness": {
+    "gpu_results_in_repository": true,
+    "fabricated_metrics": false,
+    "reference_reward_check_is_model_benchmark": false
+  }
+}

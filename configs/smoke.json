@@ -1,0 +1,72 @@
+{
+  "project": {"name": "lse-v2-smoke", "root": "..", "seed": 42},
+  "model": {
+    "name_or_path": "Qwen/Qwen2.5-1.5B-Instruct",
+    "dtype": "bfloat16",
+    "device_map": "auto",
+    "trust_remote_code": true,
+    "lora": {"r": 8, "alpha": 16, "dropout": 0.05}
+  },
+  "data": {
+    "audio_manifest": "examples/audio_manifest.smoke.jsonl",
+    "sft_train": "outputs/smoke/data/sft/train.jsonl",
+    "sft_eval": "outputs/smoke/data/sft/eval.jsonl",
+    "dpo_train": "outputs/smoke/data/dpo/train.jsonl",
+    "dpo_eval": "outputs/smoke/data/dpo/eval.jsonl",
+    "grpo_train": "outputs/smoke/data/grpo/train.jsonl",
+    "grpo_eval": "outputs/smoke/data/grpo/eval.jsonl"
+  },
+  "training": {
+    "pipeline_status": "outputs/smoke/pipeline_status.json",
+    "stage_inputs": {
+      "dpo": "outputs/smoke/sft/final",
+      "grpo": "outputs/smoke/dpo/final"
+    },
+    "stages": {
+      "sft": {
+        "output_dir": "outputs/smoke/sft",
+        "max_steps": 1,
+        "per_device_train_batch_size": 1,
+        "per_device_eval_batch_size": 1,
+        "gradient_accumulation_steps": 1,
+        "learning_rate": 0.0002,
+        "max_length": 512,
+        "eval_strategy": "no",
+        "save_steps": 1
+      },
+      "dpo": {
+        "output_dir": "outputs/smoke/dpo",
+        "max_steps": 1,
+        "per_device_train_batch_size": 1,
+        "per_device_eval_batch_size": 1,
+        "gradient_accumulation_steps": 1,
+        "learning_rate": 0.00005,
+        "beta": 0.1,
+        "max_length": 512,
+        "max_prompt_length": 384,
+        "eval_strategy": "no",
+        "save_steps": 1
+      },
+      "grpo": {
+        "output_dir": "outputs/smoke/grpo",
+        "max_steps": 1,
+        "per_device_train_batch_size": 2,
+        "per_device_eval_batch_size": 2,
+        "gradient_accumulation_steps": 1,
+        "learning_rate": 0.00001,
+        "beta": 0.04,
+        "num_generations": 2,
+        "max_prompt_length": 384,
+        "max_completion_length": 128,
+        "eval_strategy": "no",
+        "save_steps": 1
+      }
+    }
+  },
+  "evaluation": {
+    "predictions": "outputs/smoke/predictions.jsonl",
+    "report": "outputs/smoke/reward_report.json",
+    "max_samples": 2,
+    "max_new_tokens": 128
+  }
+}

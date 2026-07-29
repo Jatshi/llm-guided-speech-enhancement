@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Gradio Demo：LLM 引导的语音增强策略生成 + 简易谱减增强。
 
@@ -9,19 +8,23 @@ Gradio Demo：LLM 引导的语音增强策略生成 + 简易谱减增强。
 模型：base(Qwen2.5-7B) + DPO(或 SFT) LoRA adapter。
 在 AutoDL 上通过自定义服务端口 6006 暴露。
 """
+
 import os
 import re
 import sys
-import numpy as np
-import torch
-import librosa
-import soundfile as sf
+
 import gradio as gr
 
 # 兼容修复：gradio 5.20 的 gradio_client 在解析 additionalProperties=True(bool) 的
 # JSON schema 时会抛 TypeError: argument of type 'bool' is not iterable，导致页面 500。
 # 这里对相关函数打补丁，遇到 bool 类型 schema 直接返回 "Any"。
 import gradio_client.utils as _gcu
+import librosa
+import numpy as np
+import soundfile as sf
+import torch
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 _orig_j2p = _gcu._json_schema_to_python_type
 
@@ -45,17 +48,18 @@ def _patched_get_type(schema):
 
 _gcu.get_type = _patched_get_type
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from peft import PeftModel
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-PROJECT = os.environ.get("LSE_PROJECT_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT = os.environ.get(
+    "LSE_PROJECT_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 MODEL_PATH = os.environ.get("MODEL_PATH", os.path.join(PROJECT, "models", "Qwen2.5-7B-Instruct"))
 DPO_ADAPTER = os.environ.get("DPO_ADAPTER", os.path.join(PROJECT, "outputs", "dpo", "final"))
 SFT_ADAPTER = os.environ.get("SFT_ADAPTER", os.path.join(PROJECT, "outputs", "sft", "final"))
 
-SYSTEM_PROMPT = "你是一个专业的语音增强专家，擅长分析音频退化类型、生成可执行的 DSP 增强策略，并解释理由。"
+SYSTEM_PROMPT = (
+    "你是一个专业的语音增强专家，擅长分析音频退化类型、生成可执行的 DSP 增强策略，并解释理由。"
+)
 
 _tokenizer = None
 _model = None
@@ -95,8 +99,10 @@ def generate_strategy(feature_text, instruction):
     text = _tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = _tokenizer(text, return_tensors="pt").to(_model.device)
     with torch.no_grad():
-        out = _model.generate(**inputs, max_new_tokens=512, do_sample=True, temperature=0.7, top_p=0.9)
-    return _tokenizer.decode(out[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+        out = _model.generate(
+            **inputs, max_new_tokens=512, do_sample=True, temperature=0.7, top_p=0.9
+        )
+    return _tokenizer.decode(out[0][inputs.input_ids.shape[1] :], skip_special_tokens=True)
 
 
 def extract_features(y, sr):
@@ -105,7 +111,7 @@ def extract_features(y, sr):
         return "<audio_analysis>\n- 音频过短，无法分析\n</audio_analysis>"
     # 简易 SNR 估计：能量高/低分位差
     frame = 400
-    energies = np.array([np.sum(y[i:i + frame] ** 2) for i in range(0, len(y) - frame, frame)])
+    energies = np.array([np.sum(y[i : i + frame] ** 2) for i in range(0, len(y) - frame, frame)])
     energies = energies[energies > 0]
     if len(energies) > 4:
         hi = np.percentile(energies, 90)
@@ -120,8 +126,11 @@ def extract_features(y, sr):
     low = band[freqs < 250].sum()
     mid = band[(freqs >= 200) & (freqs < 500)].sum()
     total = band.sum() + 1e-9
-    lines = ["<audio_analysis>", f"- 估计信噪比: {snr:.1f}dB",
-             f"- 频谱平坦度: {flat:.3f}（{'噪声特征明显' if flat > 0.3 else '语音特征为主'}）"]
+    lines = [
+        "<audio_analysis>",
+        f"- 估计信噪比: {snr:.1f}dB",
+        f"- 频谱平坦度: {flat:.3f}（{'噪声特征明显' if flat > 0.3 else '语音特征为主'}）",
+    ]
     if mid / total > 0.35:
         lines.append("- 频带能量: 200-500Hz 能量偏高（疑似窄带/空调噪声）")
     elif low / total > 0.4:
@@ -181,8 +190,17 @@ def build_ui():
     with gr.Blocks(title="LLM 引导的语音增强") as demo:
         gr.Markdown(f"# LLM 引导的语音增强策略生成\n基座 Qwen2.5-7B + LoRA（{_tag or 'SFT/DPO'}）")
         with gr.Tab("文本模式"):
-            ft = gr.Textbox(label="音频特征描述", lines=8,
-                            value="<audio_analysis>\n- 估计信噪比: 10dB\n- 频谱平坦度: 0.45（噪声特征明显）\n- 频带能量: 200-500Hz 能量偏高（窄带峰值）\n</audio_analysis>")
+            ft = gr.Textbox(
+                label="音频特征描述",
+                lines=8,
+                value=(
+                    "<audio_analysis>\n"
+                    "- 估计信噪比: 10dB\n"
+                    "- 频谱平坦度: 0.45（噪声特征明显）\n"
+                    "- 频带能量: 200-500Hz 能量偏高（窄带峰值）\n"
+                    "</audio_analysis>"
+                ),
+            )
             it = gr.Textbox(label="用户指令（可选）", value="去掉空调声，保留人声")
             bt = gr.Button("生成增强策略", variant="primary")
             ot = gr.Textbox(label="模型输出（诊断 / 策略 / 理由）", lines=16)
