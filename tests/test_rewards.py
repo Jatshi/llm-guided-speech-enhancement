@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 
 import pytest
 
@@ -63,6 +64,47 @@ def test_grpo_reward_accepts_conversational_completions() -> None:
         reward_context=[{"noise_type": "white", "snr_db": 10.0}],
     )
     assert scores == [1.0]
+
+
+@pytest.mark.parametrize(
+    ("field", "malformed_value"),
+    [
+        ("low_hz", []),
+        ("low_hz", {"unexpected": 80}),
+        ("high_hz", "7600"),
+        ("reduction_db", [10.0]),
+        ("gain_db", True),
+        ("q", None),
+    ],
+)
+def test_structured_or_non_numeric_action_parameters_never_crash_reward(
+    field: str, malformed_value: object
+) -> None:
+    payload = json.loads(good_response())
+    payload["actions"][0]["type"] = "highpass"
+    payload["actions"][0][field] = malformed_value
+
+    score = score_prescription(
+        json.dumps(payload),
+        {"noise_type": "white", "snr_db": 10.0},
+    )
+
+    assert 0.0 <= score.total <= 1.0
+    assert score.valid_json
+    assert any(field in violation for violation in score.violations)
+
+
+def test_non_finite_action_parameters_are_penalized_without_non_finite_reward() -> None:
+    payload = json.loads(good_response())
+    payload["actions"][0]["reduction_db"] = float("inf")
+
+    score = score_prescription(
+        json.dumps(payload),
+        {"noise_type": "white", "snr_db": 10.0},
+    )
+
+    assert math.isfinite(score.total)
+    assert "action_0_reduction_db_out_of_range" in score.violations
 
 
 def test_unknown_ablation_component_is_rejected() -> None:

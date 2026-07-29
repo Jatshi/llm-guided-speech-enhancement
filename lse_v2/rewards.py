@@ -16,6 +16,14 @@ DEFAULT_WEIGHTS = {
 }
 
 
+def _finite_number(value: Any) -> float | None:
+    """Return a finite JSON number, rejecting booleans and structured values."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    numeric = float(value)
+    return numeric if math.isfinite(numeric) else None
+
+
 @dataclass(frozen=True)
 class RewardBreakdown:
     format: float
@@ -84,8 +92,8 @@ def _format_reward(payload: dict[str, Any] | None, violations: list[str]) -> flo
     if not isinstance(payload["rationale"], str) or not payload["rationale"].strip():
         violations.append("rationale_empty")
         return 0.75
-    confidence = payload["confidence"]
-    if not isinstance(confidence, int | float) or not 0 <= confidence <= 1:
+    confidence = _finite_number(payload["confidence"])
+    if confidence is None or not 0 <= confidence <= 1:
         violations.append("confidence_out_of_range")
         return 0.75
     return 1.0
@@ -137,14 +145,16 @@ def _parameter_bounds_reward(payload: dict[str, Any] | None, violations: list[st
             if key not in action:
                 continue
             checks += 1
-            value = action[key]
-            if isinstance(value, int | float) and math.isfinite(value) and low <= value <= high:
+            value = _finite_number(action[key])
+            if value is not None and low <= value <= high:
                 passed += 1
             else:
                 violations.append(f"action_{index}_{key}_out_of_range")
         if "low_hz" in action and "high_hz" in action:
             checks += 1
-            if action["low_hz"] < action["high_hz"]:
+            low_hz = _finite_number(action["low_hz"])
+            high_hz = _finite_number(action["high_hz"])
+            if low_hz is not None and high_hz is not None and low_hz < high_hz:
                 passed += 1
             else:
                 violations.append(f"action_{index}_frequency_order")
@@ -182,7 +192,8 @@ def _consistency_reward(
     for index, action in enumerate(payload["actions"]):
         if not isinstance(action, dict):
             continue
-        if action.get("type") == "highpass" and action.get("low_hz", 0) > 300:
+        low_hz = _finite_number(action.get("low_hz"))
+        if action.get("type") == "highpass" and low_hz is not None and low_hz > 300:
             violations.append(f"action_{index}_highpass_conflicts_with_speech")
             score -= 0.25
     return max(0.0, score)
@@ -198,17 +209,18 @@ def _overprocessing_reward(
     for index, action in enumerate(payload["actions"]):
         if not isinstance(action, dict):
             continue
-        reduction = action.get("reduction_db", 0.0)
-        if isinstance(reduction, int | float):
-            total_reduction += max(0.0, float(reduction))
+        reduction = _finite_number(action.get("reduction_db", 0.0))
+        if reduction is not None:
+            total_reduction += max(0.0, reduction)
             if reduction > 18:
                 penalty += min(0.5, (reduction - 18) / 24)
                 violations.append(f"action_{index}_over_suppression")
-        gain = action.get("gain_db")
-        if isinstance(gain, int | float) and abs(gain) > 18:
+        gain = _finite_number(action.get("gain_db"))
+        if gain is not None and abs(gain) > 18:
             penalty += 0.25
             violations.append(f"action_{index}_extreme_gain")
-        if action.get("type") == "highpass" and action.get("low_hz", 0) > 180:
+        low_hz = _finite_number(action.get("low_hz"))
+        if action.get("type") == "highpass" and low_hz is not None and low_hz > 180:
             penalty += 0.25
             violations.append(f"action_{index}_highpass_overprocessing")
     if total_reduction > 30:
