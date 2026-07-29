@@ -82,7 +82,43 @@ The completed SFT stage processed all 114,000 rows in 5,243.8 seconds:
 | held-out token accuracy | 0.96517 |
 | training throughput | 21.74 samples/s |
 
-<!-- FINAL_EVAL_TABLE: replaced after cDPO, GRPO, and the four-stage 200-row holdout matrix finish. -->
+The conservative DPO stage also processed all 114,000 pairs:
+
+| Metric | Value |
+| --- | ---: |
+| train loss | 0.324913 |
+| held-out loss | 0.324529 |
+| held-out pair accuracy | 1.000000 |
+| held-out preference margin | 2.188927 |
+| runtime | 10,633.30 s |
+| training throughput | 10.721 samples/s |
+
+GRPO completed all 300 optimizer steps. Across those steps, mean reward was
+0.946019 (range 0.796875–0.993750), mean reward standard deviation was
+0.026765, and 181/300 steps had non-zero within-group reward variance. The
+stable resumed run took 4,247.43 seconds. Independent 2-second NVML sampling
+from checkpoint 100 onward observed 98% peak utilization, 24,067 MiB peak
+memory usage out of 24,564 MiB, and 214.74 W peak power.
+
+The final comparison uses the exact same 200 examples, selected uniformly
+without replacement from the 6,000-row holdout with seed 42. The ordered sample
+ID list has SHA-256
+`50eaa2c3c59d1c5441757517fd9f9bc059f6b943ed55802b0e7fd82df8c75588`.
+
+| Checkpoint | Valid JSON | Format | Diagnosis | Bounds | Consistency | Overprocessing | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Base | 0.3550 | 0.2663 | 0.2222 | 0.0000 | 0.2675 | 0.3550 | 0.2222 |
+| SFT | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.8200 | 1.0000 | 0.9640 |
+| cDPO | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.8200 | 1.0000 | 0.9640 |
+| GRPO | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.8200 | 1.0000 | 0.9640 |
+
+The tie among SFT, cDPO, and GRPO on this deterministic in-distribution slice
+is reported as observed; it is not presented as a GRPO gain. The later stages
+still provide independently auditable preference/RL training evidence, but a
+harder or human-reviewed test set is required to measure a quality difference.
+Machine-readable release summaries are included as
+`docs/stage_matrix_4090.json` and `docs/grpo_run_summary_4090.json` in the
+source repository.
 
 ## Usage
 

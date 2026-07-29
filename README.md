@@ -286,6 +286,38 @@ python scripts/evaluate_stage_matrix.py \
 推理吞吐和 peak VRAM。`evaluate_rewards` 在没有 prediction 时只是在校验
 reference/reward 合同，不能代替该模型矩阵。
 
+### RTX 4090 全量实跑结果
+
+本轮没有缩短数据或省略训练阶段：
+
+- SFT：114,000 条、1 epoch、7,125 steps，耗时 5,243.8 秒；
+- conservative DPO：114,000 对、1 epoch、7,125 steps，耗时
+  10,633.30 秒；
+- GRPO/RLVR：300 optimizer steps、有效 batch 16，稳定续训耗时
+  4,247.43 秒；
+- DeepSpeed checkpoint-300 的 optimizer/model state 均记录 ZeRO stage 2。
+
+GRPO 的 300 步平均 reward 为 0.946019，181/300 步存在非零组内 reward
+方差。独立 NVML 采样记录峰值显存 24,067/24,564 MiB、峰值 GPU 利用率
+98%、峰值功耗 214.74 W。
+
+同一批 200 条留出样本（seed 42，均匀无放回抽样）上的真实生成结果如下：
+
+| 阶段 | 合法 JSON | 诊断 | 参数边界 | 一致性 | 过处理约束 | 总分 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Base | 0.3550 | 0.2222 | 0.0000 | 0.2675 | 0.3550 | 0.2222 |
+| SFT | 1.0000 | 1.0000 | 1.0000 | 0.8200 | 1.0000 | 0.9640 |
+| cDPO | 1.0000 | 1.0000 | 1.0000 | 0.8200 | 1.0000 | 0.9640 |
+| GRPO | 1.0000 | 1.0000 | 1.0000 | 0.8200 | 1.0000 | 0.9640 |
+
+四阶段使用的样本 ID 列表 SHA-256 为
+`50eaa2c3c59d1c5441757517fd9f9bc059f6b943ed55802b0e7fd82df8c75588`。
+SFT、cDPO、GRPO 在这个确定性、同分布切片上持平，这是实测结果，不包装成
+“GRPO 显著提升”；要区分后训练阶段，需要更困难或经人工复核的独立测试集。
+机器可读摘要见
+[`docs/stage_matrix_4090.json`](docs/stage_matrix_4090.json)与
+[`docs/grpo_run_summary_4090.json`](docs/grpo_run_summary_4090.json)。
+
 发布前先运行强制验收；只有GRPO完成、四阶段矩阵完整且模型卡无待填标记时才能上传：
 
 ```bash

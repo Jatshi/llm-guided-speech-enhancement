@@ -692,6 +692,24 @@ WORLD_SIZE
 
 本项目在确认 world size 为 1 后自动补齐，并写入 manifest。它不是伪造多卡，而是满足 DeepSpeed singleton process-group 初始化。
 
+### 8.5 怎样证明训练真正经过了 ZeRO-2
+
+只展示 `ds_zero2.json` 不能证明 Trainer 实际消费了它。本次 GRPO checkpoint-300
+同时检查了 optimizer 与 model state：
+
+- `bf16_zero_pp_rank_0_mp_rank_00_optim_states.pt` 内嵌
+  `ds_config.zero_optimization.stage=2`；
+- `mp_rank_00_model_states.pt` 同样记录 stage 2、`dp_world_size=1`、
+  `mp_world_size=1`；
+- DeepSpeed 版本为 `0.16.3`；
+- 冻结 reference 由 TRL `prepare_deepspeed` 以 stage 0 复制到单卡，这是
+  非 ZeRO-3 reference 的预期行为，不代表可训练 policy 降成 stage 0。
+
+抽取后的轻量证据保存在
+`outputs/v2/grpo/deepspeed_checkpoint_evidence.json`，无需发布数百 MiB 的 optimizer
+分区也能复核关键元数据。正确表述是“在单卡上实跑 DeepSpeed ZeRO-2 Engine 和
+checkpoint 恢复”；因为 `world_size=1`，仍不能写成多 GPU 分片或扩展效率实验。
+
 ---
 
 ## 9. 训练流水线为什么可恢复
@@ -1040,9 +1058,68 @@ state 的 checkpoint-50 恢复，没有把加载 adapter 后重新计数冒充�
 
 这说明 GRPO 的显存不能只用“平均 completion 长度”估算，容量规划必须覆盖
 `batch × num_generations × 极端 completion length`。失败现场保存在
-`audit/failed_runs/audio-grpo-oom-step95-20260729/`。
+`audit/failed_runs/audio-grpo-oom-step95-20260729T185118CST/`。
 
-### 14.8 offline score 很高但输出不可用
+### 14.8 训练结束后评测模型被错误 offload 到 CPU
+
+GRPO 完成 300/300 步并保存最终 adapter 后，原始 pipeline 立即在同一 Python
+进程中加载评测模型。DeepSpeed policy、冻结 reference 与 CUDA allocator 缓存仍占
+约 24.07 GiB，Accelerate 因此判断新模型放不进 GPU 并准备 CPU offload。训练结果
+本身已经完整，但继续让这段评测运行会明显浪费时间。
+
+处理时先确认：
+
+- `stage_manifest.status=complete`；
+- `trainer_state.global_step=max_steps=300`；
+- final adapter 和 tokenizer 文件齐全；
+- GPU 占用来自旧训练进程，而不是未完成的 optimizer step。
+
+随后只终止 post-training evaluation，保留现场到
+`audit/failed_runs/audio-post-training-eval-memory-retention-20260729T200205CST/`，
+并在全新进程中加载单份 base + final LoRA，按原配置生成相同的 200 条固定 holdout
+预测。显存从约 24.07 GiB 降到 3.56 GiB，评测样本数、确定性解码和 reward 口径均
+未改变。
+
+代码侧增加两层防线：
+
+1. 正常 pipeline 在训练阶段后显式 `gc.collect()` 与
+   `torch.cuda.empty_cache()`；
+2. `scripts/finalize_pipeline_evaluation.py` 提供可审计的独立恢复入口，只有最终
+   adapter、stage manifest、200 条预测和 reward report 全部通过才把 pipeline
+   状态写为 complete。
+
+### 14.9 最终四阶段矩阵应该怎样解读
+
+发布评测不是分别抽四批数据，而是从 6,000 条留出集用 seed 42 均匀无放回抽取
+同一批 200 条。样本 ID 有序列表的 SHA-256 是
+`50eaa2c3c59d1c5441757517fd9f9bc059f6b943ed55802b0e7fd82df8c75588`。
+每个阶段都保存 200 行原始生成、离线 reward 报告、吞吐和显存：
+
+| 阶段 | 合法 JSON | 诊断 | 参数边界 | 一致性 | 过处理约束 | 总分 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Base | 0.3550 | 0.2222 | 0.0000 | 0.2675 | 0.3550 | 0.2222 |
+| SFT | 1.0000 | 1.0000 | 1.0000 | 0.8200 | 1.0000 | 0.9640 |
+| cDPO | 1.0000 | 1.0000 | 1.0000 | 0.8200 | 1.0000 | 0.9640 |
+| GRPO | 1.0000 | 1.0000 | 1.0000 | 0.8200 | 1.0000 | 0.9640 |
+
+这里最重要的面试判断不是把持平包装成提升，而是解释测量上限：
+
+1. SFT 已把规则化同分布任务做到接近饱和，当前 200 条确定性 slice 无法分辨
+   cDPO 与 GRPO；
+2. cDPO 和 GRPO 仍真实训练完成，分别证明偏好优化、在线可验证奖励、reference
+   policy、DeepSpeed checkpoint 和恢复链路；
+3. 若要证明算法质量增益，下一版应增加人工偏好、未见噪声/语言/设备和专门构造的
+   决策边界样本，而不是继续在已饱和 slice 上堆训练步数；
+4. 因此简历可以写“完成 SFT→cDPO→GRPO 工程闭环并建立同 ID 阶段评测”，不能写
+   “GRPO 相对 DPO 显著提升”。
+
+GRPO 训练本身的 300 步平均 reward 为 0.946019，reward 范围
+0.796875–0.993750，181/300 步存在非零组内 reward 方差。独立 NVML 采样从
+checkpoint-100 覆盖到训练结束，记录 98% 峰值 GPU 利用率、24,067/24,564 MiB
+峰值显存和 214.74 W 峰值功耗。它证明 4090 确实被高强度使用，但不能替代阶段
+质量对照。
+
+### 14.10 offline score 很高但输出不可用
 
 抽查 raw prediction。程序 reward 可能存在漏洞，尤其是：
 

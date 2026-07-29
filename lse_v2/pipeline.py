@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,17 @@ from .evaluation import evaluate_rewards
 from .inference import generate_predictions
 from .io import utc_now, write_json_atomic
 from .training import STAGES, train_stage
+
+
+def release_training_memory() -> None:
+    """Collect Trainer/DeepSpeed cycles before loading the evaluation model."""
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def run_pipeline(
@@ -58,6 +70,8 @@ def run_pipeline(
             state["finished_at"] = utc_now()
             write_json_atomic(status_path, state)
             raise
+    if not dry_run:
+        release_training_memory()
     eval_dataset = resolve_path(config, config["data"]["grpo_eval"])
     eval_output = resolve_path(
         config, config["evaluation"].get("report", "outputs/v2/evaluation/reward_report.json")

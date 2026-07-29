@@ -1,6 +1,6 @@
 # Run Manifest — LSE 2.0
 
-状态：**AutoDL全量SFT已完成；conservative DPO运行中；GRPO与四阶段矩阵排队自动执行。**
+状态：**AutoDL 全量 SFT、conservative DPO、300 步 GRPO 与同一 200 条留出集四阶段矩阵均已完成。**
 
 ## 固定环境
 
@@ -26,7 +26,7 @@ python -m lse_v2.data_cli build \
   --output-dir outputs/smoke/data \
   --seed 42
 python -m lse_v2.pipeline --config configs/smoke.json --dry-run
-python -m pytest  # 35 passed
+python -m pytest  # 45 passed
 python -m ruff check .
 python -m ruff format --check .
 python scripts/distributed_contract_smoke.py --world-size 2
@@ -57,33 +57,37 @@ bash scripts/autodl_v2_run.sh
 
 | 字段 | 真实值 |
 | --- | --- |
-| 开始/结束时间 | SFT：2026-07-29 04:39:34–06:09:01 UTC；总管线仍在运行 |
-| Git commit | 本地特性分支尚未发布；最终发布时填写 |
-| 数据清单SHA256 | 最终归档后从dataset manifest填写 |
-| SFT峰值显存/耗时 | 峰值显存待最终日志审计；耗时5,243.8s |
-| DPO峰值显存/耗时 | 运行中 |
-| GRPO峰值显存/耗时 | 待运行 |
+| 开始/结束时间 | SFT：2026-07-29 04:39:34–06:09:01 UTC；cDPO：06:44:30–09:45:25 UTC；GRPO 稳定续训：10:51:06–12:02:17 UTC |
+| Git commit | 发布提交在最终 GitHub 合并后记录；训练代码谱系保留在特性分支 |
+| 四阶段样本ID SHA256 | `50eaa2c3c59d1c5441757517fd9f9bc059f6b943ed55802b0e7fd82df8c75588` |
+| SFT耗时/吞吐 | 5,243.8s / 21.74 samples/s |
+| DPO耗时/吞吐 | 10,633.30s / 10.721 samples/s |
+| GRPO峰值显存/耗时 | 24,067 / 24,564 MiB；4,247.43s（从 checkpoint-50 稳定续训） |
 | SFT train/held-out loss | 0.09630 / 0.08168 |
 | SFT held-out token accuracy | 0.96517 |
-| 最终总奖励 | GRPO后填写 |
-| JSON合法率 | 四阶段矩阵后填写 |
-| 诊断一致性 | 四阶段矩阵后填写 |
-| 过处理违规率 | 四阶段矩阵后填写 |
-| 失败案例数 | 四阶段矩阵后填写 |
+| cDPO train/held-out loss | 0.324913 / 0.324529 |
+| cDPO held-out pair accuracy / margin | 1.000000 / 2.188927 |
+| GRPO训练平均奖励 | 0.946019（300 步；范围 0.796875–0.993750） |
+| 四阶段总分 | Base 0.222188；SFT 0.964000；cDPO 0.964000；GRPO 0.964000 |
+| 四阶段JSON合法率 | Base 0.355000；SFT/cDPO/GRPO 均为 1.000000 |
+| 四阶段诊断分 | Base 0.222188；SFT/cDPO/GRPO 均为 1.000000 |
+| 四阶段一致性分 | Base 0.267500；SFT/cDPO/GRPO 均为 0.820000 |
+| 四阶段过处理约束分 | Base 0.355000；SFT/cDPO/GRPO 均为 1.000000 |
 
-GitHub 草稿 PR 已建立；Python 3.10、3.11、3.12 三组 CI 均通过。PR 在最终
-GRPO adapter、四阶段原始预测、模型卡和 Hugging Face 链接提交前保持 draft。
+GitHub 草稿 PR 已建立；Python 3.10、3.11、3.12 三组 CI 均通过。最终
+GRPO adapter 与四阶段原始预测已完成；Hugging Face 上传、最终提交和 PR 合并由
+发布门禁完成。
 
-## DeepSpeed对照（待真实GPU运行）
+## DeepSpeed 真实证据与边界
 
 原始记录模板：
 `docs/deepspeed_comparison_template.csv`
 
 | Profile | World size | 峰值显存 | tokens/s | samples/s | 证据状态 |
 | --- | ---: | ---: | ---: | ---: | --- |
-| 无DeepSpeed | 1 | 待运行 | 待运行 | 待运行 | pending |
-| ZeRO-2 | 1 | 待最终日志审计 | 未单独记录 | SFT 21.74 | SFT verified；cDPO running |
-| ZeRO-3 CPU offload | 1 | 待运行 | 待运行 | 待运行 | pending |
+| 无DeepSpeed | 1 | 未运行 | 未运行 | 未运行 | 不虚构未执行对照 |
+| ZeRO-2 | 1 | GRPO NVML峰值24,067 MiB | 未单独记录 | SFT 21.74；cDPO 10.721；GRPO 2.260 | checkpoint-300 optimizer/model state均验证stage 2 |
+| ZeRO-3 CPU offload | 1 | 未运行 | 未运行 | 未运行 | 单卡不宣称跨GPU分片收益 |
 
 `world_size=1`时ZeRO-2没有跨GPU分片收益。ZeRO-3 CPU offload仅作为显存换吞吐方案，
 不能在实测前声称更优。CPU多进程contract smoke也不是多GPU证据。
