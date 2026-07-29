@@ -26,7 +26,7 @@ python -m lse_v2.data_cli build \
   --output-dir outputs/smoke/data \
   --seed 42
 python -m lse_v2.pipeline --config configs/smoke.json --dry-run
-python -m pytest  # 33 passed
+python -m pytest  # 35 passed
 python -m ruff check .
 python -m ruff format --check .
 python scripts/distributed_contract_smoke.py --world-size 2
@@ -70,6 +70,9 @@ bash scripts/autodl_v2_run.sh
 | 诊断一致性 | 四阶段矩阵后填写 |
 | 过处理违规率 | 四阶段矩阵后填写 |
 | 失败案例数 | 四阶段矩阵后填写 |
+
+GitHub 草稿 PR 已建立；Python 3.10、3.11、3.12 三组 CI 均通过。PR 在最终
+GRPO adapter、四阶段原始预测、模型卡和 Hugging Face 链接提交前保持 draft。
 
 ## DeepSpeed对照（待真实GPU运行）
 

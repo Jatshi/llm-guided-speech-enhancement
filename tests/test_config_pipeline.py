@@ -26,6 +26,7 @@ def test_reference_evaluation_is_machine_readable(tmp_path: Path) -> None:
     report = evaluate_rewards(tmp_path / "data" / "grpo" / "eval.jsonl")
     assert report["schema_version"] == "lse.reward_report.v2"
     assert report["num_samples"] == 2
+    assert report["metrics"]["valid_json_rate"] == 1.0
     assert report["missing_predictions_filled_with_reference"] == 2
     assert set(report["reward_ablations"]) == {
         "without_format",
@@ -57,7 +58,30 @@ def test_prediction_evaluation_never_backfills_missing_rows(tmp_path: Path) -> N
     assert report["prediction_coverage"] == 0.5
     assert report["missing_predictions_skipped"] == 1
     assert report["missing_predictions_filled_with_reference"] == 0
+    assert report["metrics"]["valid_json_rate"] == 1.0
     assert "never filled with references" in report["note"]
+
+
+def test_prediction_evaluation_reports_invalid_json_rate(tmp_path: Path) -> None:
+    build_alignment_datasets(REPO / "examples" / "audio_manifest.smoke.jsonl", tmp_path / "data")
+    dataset = tmp_path / "data" / "grpo" / "eval.jsonl"
+    rows = read_jsonl(dataset)
+    predictions = tmp_path / "predictions.jsonl"
+    write_jsonl(
+        predictions,
+        [
+            {"sample_id": rows[0]["sample_id"], "response": "{invalid"},
+            {
+                "sample_id": rows[1]["sample_id"],
+                "response": rows[1]["reward_context"]["expected_response"],
+            },
+        ],
+    )
+
+    report = evaluate_rewards(dataset, predictions_path=predictions)
+
+    assert report["num_samples"] == 2
+    assert report["metrics"]["valid_json_rate"] == 0.5
 
 
 def test_pipeline_dry_run_validates_every_stage(tmp_path: Path) -> None:

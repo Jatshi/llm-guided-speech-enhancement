@@ -34,7 +34,7 @@ rationale, and confidence. It is a language-model control layer for speech
 enhancement research. It does **not** directly ingest or restore raw waveforms.
 
 Source code and reproducibility scripts:
-[Jatshi/audio-codec-llm](https://github.com/Jatshi/audio-codec-llm).
+[Jatshi/llm-guided-speech-enhancement](https://github.com/Jatshi/llm-guided-speech-enhancement).
 
 ## Training data
 

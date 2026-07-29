@@ -1,6 +1,6 @@
 # LLM-Guided Speech Enhancement 2.0
 
-[![CI](https://github.com/Jatshi/audio-codec-llm/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatshi/audio-codec-llm/actions/workflows/ci.yml)
+[![CI](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml)
 
 [从零手搓完整学习手册](docs/audio_llm_v2_from_scratch_zh.md) ·
 [项目实施计划](PROJECT_PLAN.md) ·

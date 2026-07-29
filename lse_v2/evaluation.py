@@ -70,6 +70,7 @@ def evaluate_rewards(
         raise ValueError("Prediction file did not match any dataset sample IDs")
     for record, response, source in evaluated:
         breakdown = score_prescription(response, record["reward_context"])
+        aggregates["valid_json_rate"].append(float(breakdown.valid_json))
         for key, value in breakdown.to_dict().items():
             if isinstance(value, int | float) and key != "valid_json":
                 aggregates[key].append(float(value))

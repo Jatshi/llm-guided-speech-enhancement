@@ -22,7 +22,7 @@
   "hardware_target": "single RTX 4090 24GB",
   "local_gates": [
     "python -m compileall -q lse_v2 src",
-    "python -m pytest  # 33 passed",
+    "python -m pytest  # 35 passed",
     "python -m ruff check .",
     "python -m ruff format --check .",
     "python scripts/distributed_contract_smoke.py --world-size 2"
