@@ -10,6 +10,7 @@ MANIFEST_DEFAULT="$REPO_ROOT/data/training/audio_manifest.v2.jsonl"
 export HF_HOME="${HF_HOME:-/root/autodl-tmp/huggingface}"
 export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 if [[ -f "$VENV_DIR/bin/activate" ]]; then
   source "$VENV_DIR/bin/activate"

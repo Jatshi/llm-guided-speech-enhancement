@@ -107,8 +107,9 @@ def test_reference_configs_are_valid() -> None:
     assert autodl["project"]["seed"] == 42
     assert autodl["training"]["stages"]["dpo"]["label_smoothing"] == 0.1
     grpo = autodl["training"]["stages"]["grpo"]
-    assert grpo["per_device_train_batch_size"] == 8
-    assert grpo["gradient_accumulation_steps"] == 2
+    assert grpo["per_device_train_batch_size"] == 4
+    assert grpo["gradient_accumulation_steps"] == 4
+    assert grpo["per_device_train_batch_size"] * grpo["gradient_accumulation_steps"] == 16
     assert grpo["gradient_checkpointing"] is False
     assert grpo["temperature"] == 1.8
     assert grpo["top_p"] == 1.0

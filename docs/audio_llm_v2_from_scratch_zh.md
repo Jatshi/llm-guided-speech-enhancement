@@ -997,7 +997,52 @@ DeepSpeed launcher 会注入 `--local_rank=0`。CLI 应同时接受下划线和�
 又没有像更高温度那样快速破坏 JSON。完整原始校准数字见
 `docs/grpo_calibration.json`。
 
-### 14.6 offline score 很高但输出不可用
+### 14.6 合法 JSON 仍让 reward 崩溃
+
+`json.loads` 成功只证明语法合法，不证明字段类型符合契约。全量 GRPO 第一次运行到
+step 73 时，模型生成了一个合法 JSON，但某个 action 的 `low_hz` 是数组。旧实现
+直接执行 `action["low_hz"] < action["high_hz"]`，因此抛出 `TypeError`，而不是
+给该 completion 一个低分。
+
+奖励函数面对的是**不可信的模型输出**，必须是一个 total function：对任意可解析或
+不可解析文本都返回有限、确定、落在约定范围内的分数。修复方式是：
+
+1. 所有模型控制的数值先经过统一的 finite-number validator；
+2. 显式拒绝 `bool`（Python 中它是 `int` 的子类）、字符串、数组、对象、空值与
+   `NaN/Inf`；
+3. 频率先分别完成类型验证，再比较顺序；
+4. consistency 和 overprocessing 分量不再重复做未经保护的数值比较；
+5. 异常值写入 `violations` 并降低 reward，而不是让训练进程退出；
+6. 对数组、对象、字符串、布尔值、空值和非有限数加入参数化回归测试。
+
+失败日志、step-50 trainer state、修复后测试和 incident JSON 均保存在
+`audit/failed_runs/audio-grpo-malformed-reward-20260729T183355CST/`。修复提交为
+`8ce701d`；训练保持 300 步目标，从包含 optimizer、scheduler、RNG 与 DeepSpeed
+state 的 checkpoint-50 恢复，没有把加载 adapter 后重新计数冒充断点恢复，也没有
+缩短实验。
+
+### 14.7 罕见长 completion 引发 OOM
+
+第一次修复后的续训在 step 95 遇到一批接近生成上限的 completion。micro-batch 8
+时，PyTorch 已分配约 20.10 GiB、保留但未分配约 2.11 GiB，下一次申请 1016 MiB
+失败。这里不能靠缩短数据、减少 300 步或移除 reference model 来掩盖问题。
+
+本项目按等效 batch 不变原则处理：
+
+- `per_device_train_batch_size: 8 → 4`；
+- `gradient_accumulation_steps: 2 → 4`；
+- 有效 batch 始终为 \(4\times4=8\times2=16\)；
+- 设置 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` 降低可变生成长度带来的
+  allocator 碎片；
+- 从 checkpoint-50 恢复并重算未落盘的 step 51–95；
+- 保持两份 cDPO policy/reference、`beta=0.04`、两个 generations、256 token
+  上限和 300 optimizer steps 不变。
+
+这说明 GRPO 的显存不能只用“平均 completion 长度”估算，容量规划必须覆盖
+`batch × num_generations × 极端 completion length`。失败现场保存在
+`audit/failed_runs/audio-grpo-oom-step95-20260729/`。
+
+### 14.8 offline score 很高但输出不可用
 
 抽查 raw prediction。程序 reward 可能存在漏洞，尤其是：
 
