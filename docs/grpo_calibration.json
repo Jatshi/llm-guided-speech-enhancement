@@ -1,0 +1,99 @@
+{
+  "schema_version": "lse.grpo_calibration.v2",
+  "hardware": "NVIDIA GeForce RTX 4090 24GB",
+  "software": {
+    "torch": "2.5.1+cu121",
+    "transformers": "4.48.3",
+    "trl": "0.16.1",
+    "peft": "0.14.0",
+    "deepspeed": "0.16.3"
+  },
+  "stage_input": "outputs/v2/dpo/final",
+  "fixed_seed": 42,
+  "reference_failure": {
+    "mode": "implicit_adapter_disabled_vanilla_base",
+    "first_step_loss": 1.9981211781195366e+17,
+    "first_step_kl": 4.998995586381251e+18,
+    "first_step_grad_norm": "NaN",
+    "outcome": "CUDA probability tensor assertion",
+    "resolution": "explicit frozen copy of the cDPO stage-input adapter"
+  },
+  "generation_checkpointing_failure": {
+    "symptom": "repeated opening-brace tokens until the 256-token cap",
+    "reward": 0.0,
+    "valid_json_rate": 0.0,
+    "step_seconds_batch8_accum2": 46.93,
+    "resolution": "disable gradient checkpointing for GRPO only"
+  },
+  "healthy_one_step_calibration": {
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 2,
+    "effective_batch_size": 16,
+    "gradient_checkpointing": false,
+    "step_seconds": 8.8,
+    "peak_allocated_gib": 15.326,
+    "reward": 0.96875,
+    "completion_length": 89.75,
+    "kl": 0.0
+  },
+  "temperature_sweep": {
+    "num_prompts": 32,
+    "num_generations": 2,
+    "top_p": 1.0,
+    "rows": [
+      {
+        "temperature": 1.65,
+        "valid_json_rate": 0.9375,
+        "mean_reward": 0.9,
+        "different_completion_rate": 0.34375,
+        "reward_signal_rate": 0.15625,
+        "mean_pair_reward_std": 0.099437
+      },
+      {
+        "temperature": 1.7,
+        "valid_json_rate": 0.90625,
+        "mean_reward": 0.869531,
+        "different_completion_rate": 0.375,
+        "reward_signal_rate": 0.15625,
+        "mean_pair_reward_std": 0.100542
+      },
+      {
+        "temperature": 1.75,
+        "valid_json_rate": 0.890625,
+        "mean_reward": 0.861719,
+        "different_completion_rate": 0.40625,
+        "reward_signal_rate": 0.25,
+        "mean_pair_reward_std": 0.153575
+      },
+      {
+        "temperature": 1.8,
+        "valid_json_rate": 0.875,
+        "mean_reward": 0.841406,
+        "different_completion_rate": 0.5,
+        "reward_signal_rate": 0.34375,
+        "mean_pair_reward_std": 0.182301
+      },
+      {
+        "temperature": 1.85,
+        "valid_json_rate": 0.796875,
+        "mean_reward": 0.769531,
+        "different_completion_rate": 0.5,
+        "reward_signal_rate": 0.375,
+        "mean_pair_reward_std": 0.239753
+      },
+      {
+        "temperature": 1.9,
+        "valid_json_rate": 0.71875,
+        "mean_reward": 0.69375,
+        "different_completion_rate": 0.71875,
+        "reward_signal_rate": 0.5,
+        "mean_pair_reward_std": 0.30715
+      }
+    ],
+    "selected": {
+      "temperature": 1.8,
+      "top_p": 1.0,
+      "reason": "Balances structured-output validity with non-zero within-group reward signal."
+    }
+  }
+}

@@ -151,6 +151,7 @@ def _load_base_and_adapter(
     adapter_path: Path,
     *,
     deepspeed_enabled: bool,
+    is_trainable: bool = True,
 ) -> tuple[Any, Any]:
     import torch
     from peft import PeftModel
@@ -173,9 +174,38 @@ def _load_base_and_adapter(
     if not deepspeed_enabled:
         model_kwargs["device_map"] = config["model"].get("device_map", "auto")
     base = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
-    model = PeftModel.from_pretrained(base, str(adapter_path), is_trainable=True)
+    model = PeftModel.from_pretrained(base, str(adapter_path), is_trainable=is_trainable)
+    if not is_trainable:
+        model.requires_grad_(False)
+        model.eval()
     model.config.use_cache = False
     return tokenizer, model
+
+
+def _attach_grpo_reference(trainer: Any, reference_model: Any) -> Any:
+    """Attach an explicit frozen copy of the stage-input policy to GRPO.
+
+    TRL 0.16 treats a PEFT policy with ``ref_model=None`` as "compare against
+    the same base model with its adapter disabled".  That is correct for a
+    freshly initialized adapter, but not for this chained pipeline: the GRPO
+    policy starts from an already-trained cDPO adapter.  Comparing that policy
+    with the vanilla base can make the first KL term enormous.  Keep a second,
+    frozen copy of the cDPO adapter so the initial policy and reference are
+    identical, while retaining the configured non-zero KL coefficient.
+    """
+
+    if trainer.ref_model is not None:
+        raise RuntimeError("GRPO trainer unexpectedly initialized a reference model")
+    reference_model.requires_grad_(False)
+    reference_model.eval()
+    if trainer.is_deepspeed_enabled:
+        from trl.models import prepare_deepspeed
+
+        prepared = prepare_deepspeed(reference_model, trainer.accelerator)
+    else:
+        prepared = trainer.accelerator.prepare_model(reference_model, evaluation_mode=True)
+    trainer.ref_model = prepared
+    return prepared
 
 
 def _train_sft(
@@ -286,6 +316,12 @@ def _train_grpo(
     tokenizer, model = _load_base_and_adapter(
         config, dpo_adapter, deepspeed_enabled=deepspeed_config is not None
     )
+    _, reference_model = _load_base_and_adapter(
+        config,
+        dpo_adapter,
+        deepspeed_enabled=deepspeed_config is not None,
+        is_trainable=False,
+    )
     params = config["training"]["stages"]["grpo"]
     kwargs = _common_args(config, "grpo", output_dir, deepspeed_config)
     kwargs.update(
@@ -294,6 +330,8 @@ def _train_grpo(
             "max_completion_length": int(params.get("max_completion_length", 256)),
             "num_generations": int(params.get("num_generations", 2)),
             "temperature": float(params.get("temperature", 0.7)),
+            "top_p": float(params.get("top_p", 1.0)),
+            "repetition_penalty": float(params.get("repetition_penalty", 1.0)),
             "beta": float(params.get("beta", 0.04)),
         }
     )
@@ -308,6 +346,32 @@ def _train_grpo(
         "tokenizer": tokenizer,
     }
     trainer = GRPOTrainer(**_filter_kwargs(GRPOTrainer, trainer_kwargs))
+    _attach_grpo_reference(trainer, reference_model)
+    write_json_atomic(
+        output_dir / "reference_policy.json",
+        {
+            "schema_version": "lse.grpo_reference.v2",
+            "mode": "explicit_frozen_stage_input_adapter",
+            "source_adapter": str(dpo_adapter),
+            "beta": float(params.get("beta", 0.04)),
+            "policy_and_reference_identical_at_step_zero": True,
+            "generation": {
+                "temperature": float(params.get("temperature", 0.7)),
+                "top_p": float(params.get("top_p", 1.0)),
+                "num_generations": int(params.get("num_generations", 2)),
+                "gradient_checkpointing": bool(params.get("gradient_checkpointing", True)),
+            },
+            "reason": (
+                "The chained GRPO policy starts from the trained cDPO adapter; "
+                "adapter-disabled vanilla-base reference logits are not the stage-input policy."
+            ),
+            "generation_compatibility_note": (
+                "Gradient checkpointing is disabled for GRPO because Qwen2.5 generation under "
+                "Transformers 4.48 with training-mode checkpointing disabled KV cache and "
+                "produced repeated invalid tokens. SFT and cDPO retain checkpointing."
+            ),
+        },
+    )
     trainer.train(resume_from_checkpoint=str(resume) if resume else None)
     trainer.save_state()
     final_dir = output_dir / "final"
@@ -431,6 +495,8 @@ def train_stage(
     }
     if deepspeed_config:
         result["artifacts"]["deepspeed_runtime"] = str(output_dir / "deepspeed_runtime.json")
+    if stage == "grpo":
+        result["artifacts"]["reference_policy"] = str(output_dir / "reference_policy.json")
     write_json_atomic(output_dir / "stage_manifest.json", result)
     return result
 

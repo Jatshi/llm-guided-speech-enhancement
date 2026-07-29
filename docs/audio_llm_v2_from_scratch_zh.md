@@ -393,7 +393,16 @@ BF16 与 FP32 有相同的 8-bit exponent，动态范围更大，通常比 FP16 
 \text{更多计算}
 \]
 
-配置使用 `use_reentrant=False`，兼容现代 PyTorch/Transformers 的推荐路径。
+SFT 与 cDPO 使用 `use_reentrant=False`，兼容现代 PyTorch/Transformers 的推荐路径。
+
+GRPO 是一个必须单独验证的例外。Qwen2.5 + Transformers 4.48 在训练态启用
+gradient checkpointing 后，会把生成阶段的 `use_cache` 关闭。4090 实跑中，
+同一个 cDPO adapter 在普通采样时能稳定生成合法 JSON，但进入该路径后会连续生成
+`{"{"{"...` 直至 256 token 上限，导致所有 reward 都变成 0。关闭 GRPO 的
+checkpointing 后，首步平均 completion 从 256 token 恢复到约 90 token，
+reward 从 0 恢复到 0.96875，单步时间也从 46.9 秒降到 8.8 秒；峰值 allocated
+显存为 15.33 GiB。因此本项目保留 SFT/cDPO checkpointing，只对 GRPO 关闭。
+这不是为了省略训练，而是修复生成语义并提高真实吞吐。
 
 ### 4.5 有效 batch size
 
@@ -482,9 +491,25 @@ GRPO 的 per-device batch 还必须被 `num_generations=2` 整除，否则组内
 
 \(y_w\) 是 chosen，\(y_l\) 是 rejected。
 
-### 6.2 `ref_model=None` 不等于没有参考策略
+### 6.2 `ref_model=None` 不等于参考策略一定正确
 
-PEFT/TRL 可以使用 adapter-disabled 的同一 base 作为隐式 reference，避免再常驻完整的第二份 1.5B 模型。要根据所用 TRL 版本确认语义，不能想当然。
+PEFT/TRL 可以使用 adapter-disabled 的同一 base 作为隐式 reference。这只在
+“当前 adapter 是从该 base 新建的增量”时等价于初始策略。本项目的 GRPO 却是从
+已经训练完成的 cDPO adapter 继续优化；关闭 adapter 得到的是原始 Qwen，而不是
+GRPO 的 step-0 策略。
+
+TRL 0.16 的隐式 reference 在本次实跑第 1 步产生约 \(5\times10^{18}\) 的 KL、
+约 \(2\times10^{17}\) 的 loss 和 NaN 梯度，随后触发 CUDA 概率张量断言。修复方式
+不是把 `beta` 改成 0，而是额外加载一份相同 cDPO adapter：
+
+- policy copy：可训练；
+- reference copy：`requires_grad=False` 且 `eval()`；
+- DeepSpeed ZeRO-2 下 reference 以 stage-0 engine 常驻单卡；
+- `beta=0.04` 保持不变；
+- `reference_policy.json` 记录来源、模式和生成配置。
+
+修复后首步 KL 降到正常的 \(10^{-4}\) 量级，且没有取消 KL 约束。面试时应明确：
+单卡上第二份 reference 会增加显存，但它保证了“相对 cDPO 初始策略”的数学语义。
 
 ### 6.3 从 `beta=0.1` 校准到 `beta=0.01`
 
@@ -729,7 +754,8 @@ checkpoint 服务中断恢复；`final/` 服务阶段串联和发布。DPO 启�
 
 ### 10.2 核心指标
 
-- valid JSON rate；
+- `valid_json_rate`：可被解析为 JSON 的 prediction 占比，评测器将
+  `RewardBreakdown.valid_json` 转为 0/1 后在实际匹配到的 prediction 上求均值；
 - format mean；
 - diagnosis mean；
 - parameter bounds mean；
@@ -948,6 +974,28 @@ DeepSpeed launcher 会注入 `--local_rank=0`。CLI 应同时接受下划线和�
 - parsing 是否把所有输出都判成 invalid；
 - reward 是否饱和；
 - `num_generations` 与 batch 是否兼容。
+
+本次实跑同时遇到了两种“全相同”，处理方式不同：
+
+1. reward 全为 0：打印原始 completion 后发现是 checkpointing 生成退化，关闭
+   GRPO checkpointing 后修复；
+2. reward 都约为 0.95–1.0 且组内标准差为 0：输出合法但两次采样完全相同，
+   advantage 仍为 0，需要提高探索温度。
+
+固定 32 个 prompt 的校准结果表明：
+
+| temperature | 合法 JSON | 文本不同采样对 | 非零 reward 差采样对 | 平均 reward |
+|---:|---:|---:|---:|---:|
+| 1.65 | 93.75% | 34.38% | 15.63% | 0.9000 |
+| 1.70 | 90.63% | 37.50% | 15.63% | 0.8695 |
+| 1.75 | 89.06% | 40.63% | 25.00% | 0.8617 |
+| **1.80** | **87.50%** | **50.00%** | **34.38%** | **0.8414** |
+| 1.85 | 79.69% | 50.00% | 37.50% | 0.7695 |
+| 1.90 | 71.88% | 71.88% | 50.00% | 0.6938 |
+
+最终选 `temperature=1.8, top_p=1.0`，因为它已经提供稳定的组内 reward 信号，
+又没有像更高温度那样快速破坏 JSON。完整原始校准数字见
+`docs/grpo_calibration.json`。
 
 ### 14.6 offline score 很高但输出不可用
 
