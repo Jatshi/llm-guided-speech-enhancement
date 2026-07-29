@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+build/
+dist/
 .ipynb_checkpoints/
 .venv/
 venv/
@@ -44,7 +46,12 @@ tb_logs/
 Thumbs.db
 .idea/
 .vscode/
+.codegraph/
 
 # ---- Keep README assets ----
 !assets/readme/*.png
 !assets/readme/*.gif
+
+# ---- V2 generated artifacts ----
+outputs/v2/
+outputs/smoke/

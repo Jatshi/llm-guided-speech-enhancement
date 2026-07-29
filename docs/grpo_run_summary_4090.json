@@ -1,0 +1,44 @@
+{
+  "schema_version": "lse.grpo.release_summary.v1",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "memory_total_mib": 24564
+  },
+  "training": {
+    "optimizer_steps": 300,
+    "effective_batch_size": 16,
+    "micro_batch_size": 4,
+    "gradient_accumulation_steps": 4,
+    "num_generations": 2,
+    "max_completion_length": 256,
+    "resume_from_checkpoint": 50,
+    "stable_resume_runtime_seconds": 4247.4299,
+    "train_samples_per_second": 2.26,
+    "train_steps_per_second": 0.071,
+    "train_loss": 0.002013085126449141
+  },
+  "reward": {
+    "steps": 300,
+    "mean": 0.9460190072655678,
+    "minimum": 0.7968750298023224,
+    "maximum": 0.9937500059604645,
+    "mean_group_standard_deviation": 0.02676460526980615,
+    "steps_with_nonzero_group_standard_deviation": 181,
+    "mean_kl": 0.0015325776239236196
+  },
+  "nvml": {
+    "sampling_interval_seconds": 2,
+    "samples": 1580,
+    "scope": "checkpoint-100 through post-training evaluation cleanup",
+    "peak_gpu_utilization_percent": 98,
+    "peak_memory_used_mib": 24067,
+    "peak_power_draw_w": 214.74
+  },
+  "deepspeed": {
+    "version": "0.16.3",
+    "policy_zero_stage": 2,
+    "checkpoint_evidence": "checkpoint-300/global_step300",
+    "world_size": 1,
+    "claim_boundary": "The run validates DeepSpeed Engine and checkpoint semantics on one GPU; it does not establish cross-GPU sharding or scaling."
+  }
+}

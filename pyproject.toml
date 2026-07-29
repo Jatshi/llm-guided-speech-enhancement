@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lse-v2"
+version = "2.0.0"
+description = "Versioned SFT-DPO-GRPO pipeline for evidence-grounded speech enhancement prescriptions."
+license = {text = "MIT"}
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "numpy==1.26.4",
+  "pyyaml==6.0.2",
+]
+
+[project.optional-dependencies]
+train = [
+  "accelerate==1.2.1",
+  "datasets==3.2.0",
+  "deepspeed==0.16.3",
+  "peft==0.14.0",
+  "tensorboard==2.18.0",
+  "torch==2.5.1",
+  "transformers==4.48.3",
+  "trl==0.16.1",
+]
+audio = [
+  "librosa==0.10.2.post1",
+  "soundfile==0.13.1",
+]
+test = [
+  "pytest==8.3.4",
+  "ruff==0.9.6",
+]
+
+[project.scripts]
+lse-v2 = "lse_v2.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["lse_v2*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["artifacts", "data", "outputs", "runs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

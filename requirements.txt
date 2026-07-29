@@ -1,28 +1,14 @@
-# Core DL stack (CUDA 12.1 wheels)
-torch==2.1.0
-torchvision==0.16.0
-torchaudio==2.1.0
-
-# LLM / PEFT / RLHF
-transformers==4.46.0
+# Compatibility installer. For AutoDL use scripts/autodl_v2_bootstrap.sh.
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.5.1
+transformers==4.48.3
 peft==0.14.0
-accelerate==1.2.0
-trl==0.12.0
-
-# Data & audio
+accelerate==1.2.1
+trl==0.16.1
 datasets==3.2.0
-librosa==0.10.2
-soundfile==0.13.0
-
-# Training utils & metrics
-tensorboard
-scipy
-numpy==1.26.4          # pinned: torch 2.1.0 numpy-bridge breaks on numpy 2.x
-pandas
-tqdm
-pesq==0.0.4
-pystoi==0.4.1
-
-# Serving & model hub
-gradio==5.20.0
-modelscope
+deepspeed==0.16.3
+tensorboard==2.18.0
+numpy==1.26.4
+pyyaml==6.0.2
+librosa==0.10.2.post1
+soundfile==0.13.1

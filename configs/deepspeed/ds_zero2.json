@@ -1,0 +1,27 @@
+{
+  "_portfolio_contract": {
+    "declared_world_size": 1,
+    "single_gpu_only": true,
+    "single_gpu_note": "world_size=1 has no cross-GPU parameter or optimizer-state sharding benefit; this profile exists for runtime compatibility and measured comparison only."
+  },
+  "bf16": {
+    "enabled": "auto"
+  },
+  "fp16": {
+    "enabled": "auto"
+  },
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": "auto",
+  "steps_per_print": 20,
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto",
+  "wall_clock_breakdown": false,
+  "zero_optimization": {
+    "stage": 2,
+    "allgather_bucket_size": 200000000,
+    "contiguous_gradients": true,
+    "overlap_comm": true,
+    "reduce_bucket_size": 200000000
+  }
+}
+
