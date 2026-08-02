@@ -1,4 +1,9 @@
-# LLM-Guided Speech Enhancement 2.0
+# LLM-Guided Speech Enhancement 3.0
+
+> **RTX 4090 validated:** native Whisper audio-prefix projection and the
+> execute–remeasure–revise/rollback controller are implemented. A two-step real-model
+> smoke reduced loss from 3.31035 to 2.70892 and exported a 7.1MB projector; this is
+> pipeline evidence, not a convergence claim. See [`docs/V3_DEVELOPMENT.md`](docs/V3_DEVELOPMENT.md).
 
 <div align="center">
 
@@ -9,8 +14,9 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-2563EB)](pyproject.toml)
 [![GPU](https://img.shields.io/badge/verified-RTX%204090-76B900)](docs/stage_matrix_4090.json)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-Qwen2.5--1.5B%20GRPO%20LoRA-FFD21E)](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
+[![v3 Projector](https://img.shields.io/badge/%F0%9F%A4%97-native%20audio%20projector%20v3-FF9D00)](https://huggingface.co/jatshi/Audio-Codec-LLM-Native-Audio-Projector-v3)
 
-[2.0 新增内容](docs/V2_RELEASE_NOTES.md) · [从零手搓学习手册](docs/audio_llm_v2_from_scratch_zh.md) · [项目计划](PROJECT_PLAN.md) · [架构](docs/architecture.md) · [模型权重](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
+[3.0 升级、学习与踩坑](docs/V3_DEVELOPMENT.md) · [2.0 新增内容](docs/V2_RELEASE_NOTES.md) · [从零手搓学习手册](docs/audio_llm_v2_from_scratch_zh.md) · [项目计划](PROJECT_PLAN.md) · [架构](docs/architecture.md) · [v3 音频投影器](https://huggingface.co/jatshi/Audio-Codec-LLM-Native-Audio-Projector-v3) · [GRPO LoRA](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
 
 ![Audio policy post-training demo: acoustic evidence to verified prescription](assets/readme/audio_policy_v2_demo.gif)
 

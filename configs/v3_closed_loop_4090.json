@@ -1,0 +1,22 @@
+{
+  "schema_version": "lse.closed_loop.v3.dev1",
+  "audio_encoder": {
+    "family": "whisper",
+    "name_or_path": "openai/whisper-small",
+    "frozen": true,
+    "pooling_stride": 4
+  },
+  "language_model": {
+    "name_or_path": "Qwen/Qwen2.5-1.5B-Instruct",
+    "adapter": "lora"
+  },
+  "controller": {
+    "max_actions": 8,
+    "max_revisions": 2,
+    "min_utility_gain": 0.01,
+    "fallback": "rollback"
+  },
+  "metrics": ["si_sdr", "stoi", "pesq", "dnsmos", "wer", "speaker_similarity"],
+  "hardware": {"required_gpus": 1, "minimum_vram_gib": 24},
+  "status": "cpu_contract_verified_gpu_pending"
+}
