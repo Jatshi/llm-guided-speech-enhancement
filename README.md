@@ -1,11 +1,23 @@
 # LLM-Guided Speech Enhancement 2.0
 
-[![CI](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml)
+<div align="center">
 
-[从零手搓完整学习手册](docs/audio_llm_v2_from_scratch_zh.md) ·
-[项目实施计划](PROJECT_PLAN.md) ·
-[架构说明](docs/architecture.md) ·
-[最终GRPO LoRA（Hugging Face）](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
+**让语言模型根据声学证据生成保守、可执行、可验证的语音增强处方。**
+
+[![Release](https://img.shields.io/badge/release-v2.0.0-7C3AED)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v2.0.0)
+[![CI](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-2563EB)](pyproject.toml)
+[![GPU](https://img.shields.io/badge/verified-RTX%204090-76B900)](docs/stage_matrix_4090.json)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-Qwen2.5--1.5B%20GRPO%20LoRA-FFD21E)](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
+
+[2.0 新增内容](docs/V2_RELEASE_NOTES.md) · [从零手搓学习手册](docs/audio_llm_v2_from_scratch_zh.md) · [项目计划](PROJECT_PLAN.md) · [架构](docs/architecture.md) · [模型权重](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
+
+![Audio policy post-training demo: acoustic evidence to verified prescription](assets/readme/audio_policy_v2_demo.gif)
+
+</div>
+
+> 这不是“LLM 直接修复波形”。系统读取版本化声学证据，输出带退化诊断、DSP 动作、
+> 参数、理由和置信度的结构化策略；每个字段都能被程序 reward 离线复算。
 
 一个面向单张RTX 4090的、可复现的语音增强策略大模型训练项目。2.0将原有硬编码
 SFT/DPO脚本升级为完整的：
@@ -22,7 +34,9 @@ SFT/DPO脚本升级为完整的：
 必须包含退化诊断、可执行DSP动作、理由和置信度。音频路径、直接提取的声学特征和标签
 均保存在版本化manifest中。
 
-## 2.0新增能力
+## 2.0 新增能力
+
+完整文件级变更、真实结果与声明边界见 [2.0 发布说明](docs/V2_RELEASE_NOTES.md)。
 
 - 统一JSON/YAML配置，支持CLI覆盖、固定随机种子和自动断点续训。
 - 保留`src/train_sft.py`、`src/train_dpo.py`等旧命令，但实现已迁移到`lse_v2`。
