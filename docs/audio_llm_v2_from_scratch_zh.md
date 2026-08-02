@@ -1212,7 +1212,106 @@ reference expected response 的满分只证明 reward 与数据相容；只有�
 
 ## 18. 本轮真实实验结果
 
-本节只接受从最终 `trainer_state.json`、`stage_manifest.json`、
-`predictions.jsonl` 和 `reward_report.json` 自动汇总的数字。训练完成后
-将记录 SFT/DPO/GRPO runtime、loss/reward、显存、留出集五分量、消融和
-最终 Hugging Face adapter 链接；任何尚未产生的指标都不提前填造。
+最终实验已经完成。本节数字均来自 `trainer_state.json`、`stage_manifest.json`、
+`predictions.jsonl`、`reward_report.json` 和独立 NVML 采样，而不是手填估算：
+
+| 阶段 | 步数 | Runtime | 训练/留出证据 |
+| --- | ---: | ---: | --- |
+| SFT | 7,125 | 5,243.8 s | train loss 0.09630；held-out loss 0.08168；token acc 0.96517 |
+| cDPO | 7,125 | 10,633.30 s | train/held-out loss 0.324913/0.324529；pair acc 1.0 |
+| GRPO | 300 | 4,247.43 s（稳定续训段） | mean reward 0.946019；181/300 步有组内方差 |
+
+同一 200 条 holdout 的 Base/SFT/cDPO/GRPO 总分为
+`0.222188/0.964/0.964/0.964`。最终 adapter 已公开在
+<https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA>。
+
+---
+
+## 19. 2.0 真实实施日志与事故复盘
+
+### 19.1 为什么先写 CPU 合同再开 4090
+
+真正的顺序是：先用三条 smoke manifest 写完 schema、数据转换、reward 单测和 pipeline
+dry-run，再租 GPU 下载数据与模型。这样能把“我的代码错了”和“CUDA/框架错了”分开。
+只有 preflight 验证磁盘、CUDA、bf16、数据量和 adapter 目录后，才进入 full run。
+
+### 19.2 数据阶段：数量大不等于证据强
+
+AISHELL 下载约 15 GB，通过 MD5 后取 40,000 个 clean 文件，每个文件派生三种受控
+条件，形成 120,000 条 manifest。最初最危险的表述是把 manifest 数量当成真实 noisy
+WAV 数量。最终只物化 200 条波形作检查，其余标记为 proxy；train/holdout 也按源音频
+隔离。这个修正避免了数据规模和音频规模混为一谈。
+
+### 19.3 事故一：隐式 reference 让 GRPO 数值爆炸
+
+现象：KL/loss 突然极端并出现 NaN。第一反应若是调低学习率，只会掩盖根因。检查
+policy/reference 的来源和 logits 后发现，框架的隐式 vanilla reference 与已连续训练的
+cDPO policy 不同源。修复是显式加载并冻结 cDPO reference，训练前校验两者 base 和
+adapter provenance；同时新增 reference 语义测试。面试时要强调“对照策略定义错误”，
+而不是“GPU 不稳定”。
+
+### 19.4 事故二：gradient checkpointing 让生成重复左花括号
+
+现象：Qwen2.5 在训练态采样时输出 `{{{{...`，格式 reward 接近失效。定位时比较了
+eval/train mode、cache 和 checkpointing，确认训练节省显存的设置泄漏到 rollout 生成。
+修复是明确切换生成状态、处理 `use_cache`，并把“长串 `{`”加入回归用例。经验是：
+训练前向与自回归生成对 cache/梯度状态的要求不同，不能假设 trainer 自动切干净。
+
+### 19.5 事故三：DPO margin 饱和
+
+现象：pair accuracy 很快到 1，但 margin 持续变大，可能只是在无界放大置信度。处理时
+没有把 1.0 当成功结束，而是检查 chosen/rejected log-prob 分布并校准 beta，最终采用
+保守 DPO 设置。该阶段的目标是建立偏好方向和稳定 reference，不是追求无限 margin。
+
+### 19.6 事故四：合法 JSON 仍能击穿 reward
+
+现象：模型输出语法合法，但参数值是数组、字符串或非有限数，reward 做数值比较时抛
+类型错误。修复是在任何算术前验证“有限标量”，违反者记入具体 violation 并给零分，
+而不是让一个坏样本中断整批训练。测试加入 list/dict/string/NaN/Infinity 五类输入。
+
+### 19.7 事故五：step 95 的长 completion OOM
+
+现象：micro-batch 8 时已分配约 20.10 GiB、保留未分配 2.11 GiB，再申请 1016 MiB
+失败。平均长度估算没有覆盖 batch 内极端 completion。不能接受的“修复”包括减少
+300 步、删 reference、缩短上限或过滤长样本。最终把 micro-batch 8→4、accumulation
+2→4，保持有效 batch 16，并启用 `expandable_segments`，从完整 checkpoint-50 恢复。
+这证明恢复是否真实，要看 optimizer/scheduler/RNG/global step，而不只是加载 adapter。
+
+### 19.8 事故六：训练完成后评测被挤到 CPU
+
+现象：300/300 已完成，但同进程中的 policy、reference、DeepSpeed engine 和 allocator
+仍占约 24.07 GiB，新加载的评测模型被 Accelerate 准备 offload。先核验 final adapter、
+trainer state 和 manifest 已完整，再只终止 post-training evaluation；随后在全新进程
+加载一份 base + final LoRA，显存约 3.56 GiB，完成原定 200 条评测。代码新增显式 GC
+以及独立 `finalize_pipeline_evaluation.py`，只有四类产物齐全才原子标记 complete。
+
+### 19.9 发布过程为何也是技术工作
+
+1. 固定同一批 200 个 ID，对四阶段重新生成；
+2. 保存 raw prediction，不只保存均值；
+3. 汇总 stage matrix，同时保留 SFT/cDPO/GRPO 持平的负结果；
+4. 检查 adapter、tokenizer、配置、模型卡和 SHA-256；
+5. 对源码、日志、manifest 做真实凭据扫描；
+6. 匿名访问 Hugging Face 验证公开性；
+7. GitHub 在 Python 3.10/3.11/3.12 通过 CI 后才打 `v2.0.0`。
+
+### 19.10 用 STAR 结构回答“最难的问题”
+
+| Situation | Task | Action | Result / Learning |
+| --- | --- | --- | --- |
+| GRPO 在 step 95 OOM | 不缩实验且继续训练 | 保持有效 batch，调整 micro-batch/accumulation，从完整 checkpoint 恢复 | 300/300 完成；容量规划开始看极端 completion |
+| KL/loss NaN | 找出是否数值或语义错误 | 审计 policy/reference provenance，显式冻结同源 reference | 消除爆炸；学到 reference 是算法定义 |
+| 最终评测准备 CPU offload | 不丢训练且保证公平评测 | 先验收训练产物，再用独立干净进程评测 | 同一 200 ID 四阶段矩阵完整 |
+| 三个后训练阶段持平 | 给出诚实结论 | 检查 raw output 和测试集难度，不挑样本 | 识别 SFT 饱和；下一版转向 OOD/边界集 |
+
+### 19.11 亲手复现清单
+
+- 手算一个目标 SNR 的噪声缩放系数并与 `src/degradation.py` 对齐；
+- 构造参数为数组的合法 JSON，验证 reward fail closed；
+- 计算 `micro_batch × accumulation × world_size`，解释 OOM 前后为何等价；
+- 删除 checkpoint 中 optimizer state，解释为什么不再是完整恢复；
+- 用同一 20 个样本比较 SFT 与 cDPO raw log-prob，而不是只看平均 reward；
+- 设计未见语言、设备、真实混响和决策边界的下一版 holdout。
+
+如果能不看文档完成这些练习，并用上面的六步故障框架复述两个事故，才算真正掌握
+2.0，而不是只会背项目名。
