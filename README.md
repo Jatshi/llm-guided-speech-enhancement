@@ -9,16 +9,16 @@
 
 **让语言模型根据声学证据生成保守、可执行、可验证的语音增强处方。**
 
-[![Release](https://img.shields.io/badge/release-v2.0.0-7C3AED)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v2.0.0)
+[![Release](https://img.shields.io/badge/release-v3.0.0-7C3AED)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v3.0.0)
 [![CI](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-2563EB)](pyproject.toml)
 [![GPU](https://img.shields.io/badge/verified-RTX%204090-76B900)](docs/stage_matrix_4090.json)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-Qwen2.5--1.5B%20GRPO%20LoRA-FFD21E)](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
 [![v3 Projector](https://img.shields.io/badge/%F0%9F%A4%97-native%20audio%20projector%20v3-FF9D00)](https://huggingface.co/jatshi/Audio-Codec-LLM-Native-Audio-Projector-v3)
 
-[3.0 升级、学习与踩坑](docs/V3_DEVELOPMENT.md) · [2.0 新增内容](docs/V2_RELEASE_NOTES.md) · [从零手搓学习手册](docs/audio_llm_v2_from_scratch_zh.md) · [项目计划](PROJECT_PLAN.md) · [架构](docs/architecture.md) · [v3 音频投影器](https://huggingface.co/jatshi/Audio-Codec-LLM-Native-Audio-Projector-v3) · [GRPO LoRA](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
+[3.0 新增内容](docs/V3_RELEASE_NOTES_ZH.md) · [3.0 学习与踩坑手册](docs/V3_LEARNING_AND_INTERVIEW_ZH.md) · [完整开发复盘](docs/V3_DEVELOPMENT.md) · [2.0 发布说明](docs/V2_RELEASE_NOTES.md) · [2.0 从零学习](docs/audio_llm_v2_from_scratch_zh.md) · [v3 音频投影器](https://huggingface.co/jatshi/Audio-Codec-LLM-Native-Audio-Projector-v3) · [GRPO LoRA](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
 
-![Audio policy post-training demo: acoustic evidence to verified prescription](assets/readme/audio_policy_v2_demo.gif)
+![Audio policy 3.0 demo: acoustic evidence to verified prescription](assets/readme/audio_policy_v2_demo.gif)
 
 </div>
 
@@ -39,6 +39,14 @@ SFT/DPO脚本升级为完整的：
 本项目输出的是可审计的增强处方，而不是把语言模型伪装成端到端波形修复器。每条处方
 必须包含退化诊断、可执行DSP动作、理由和置信度。音频路径、直接提取的声学特征和标签
 均保存在版本化manifest中。
+
+## 3.0 新增能力
+
+3.0 增加 Whisper 原始音频前缀投影、带 padding mask 的连续条件注入、
+execute–measure–revise/rollback 闭环、指标缺失的 fail-closed 语义，以及 ZeRO-2/
+ZeRO-3 单卡合同验证。真实两步训练导出了 7,089,880 字节 projector；这证明训练链路
+可用，不代表增强质量已经收敛。详见 [3.0 发布说明](docs/V3_RELEASE_NOTES_ZH.md) 与
+[学习/面试手册](docs/V3_LEARNING_AND_INTERVIEW_ZH.md)。
 
 ## 2.0 新增能力
 

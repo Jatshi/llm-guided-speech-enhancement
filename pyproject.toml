@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lse-v2"
-version = "2.0.0"
+version = "3.0.0"
 description = "Versioned SFT-DPO-GRPO pipeline for evidence-grounded speech enhancement prescriptions."
 license = {text = "MIT"}
 requires-python = ">=3.10,<3.13"
