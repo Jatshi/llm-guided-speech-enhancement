@@ -48,9 +48,7 @@ class WhisperAudioProjector(nn.Module):
             raise ValueError("input_features must have shape [batch, frames, features]")
         encoded = self.encoder(input_features).last_hidden_state
         if encoded.ndim != 3 or encoded.shape[-1] != self.config.encoder_dim:
-            raise ValueError(
-                "audio encoder output must have shape [batch, frames, encoder_dim]"
-            )
+            raise ValueError("audio encoder output must have shape [batch, frames, encoder_dim]")
         pooled = F.avg_pool1d(
             encoded.transpose(1, 2),
             kernel_size=self.config.pooling_stride,

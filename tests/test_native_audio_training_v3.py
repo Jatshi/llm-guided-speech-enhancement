@@ -15,9 +15,7 @@ def test_native_audio_manifest_resolves_relative_paths(tmp_path: Path) -> None:
     soundfile.write(audio, np.zeros(160, dtype=np.float32), 16000)
     manifest = tmp_path / "manifest.jsonl"
     manifest.write_text(
-        json.dumps(
-            {"sample_id": "one", "audio_path": audio.name, "target_text": "{\"status\":\"ok\"}"}
-        )
+        json.dumps({"sample_id": "one", "audio_path": audio.name, "target_text": '{"status":"ok"}'})
         + "\n",
         encoding="utf-8",
     )

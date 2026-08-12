@@ -122,9 +122,7 @@ class ClosedLoopEnhancer:
         *,
         executor: EnhancementExecutor,
         measure: Callable[[FloatAudio, int], MetricSnapshot],
-        reviser: Callable[
-            [EnhancementPlan, MetricSnapshot, MetricSnapshot], EnhancementPlan | None
-        ]
+        reviser: Callable[[EnhancementPlan, MetricSnapshot, MetricSnapshot], EnhancementPlan | None]
         | None = None,
         max_revisions: int = 0,
         min_utility_gain: float = 0.0,
