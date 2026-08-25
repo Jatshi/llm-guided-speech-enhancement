@@ -1,16 +1,15 @@
 """
-Gradio Demo：LLM 引导的语音增强策略生成 + 简易谱减增强。
+Gradio Demo：LLM 引导的语音增强策略生成 + 生产 DSP 执行器。
 
 两种模式：
 1) 文本模式：输入音频特征描述 + 用户指令 -> 模型输出退化诊断/增强策略/理由；
-2) 音频模式：上传音频 -> 自动提取声学特征 -> 生成策略 -> 依据策略做轻量谱减增强，返回增强音频。
+2) 音频模式：上传音频 -> 自动提取声学特征 -> 生成策略 -> 安全校验并执行 DSP，返回增强音频。
 
-模型：base(Qwen2.5-7B) + DPO(或 SFT) LoRA adapter。
+模型：base(Qwen2.5-1.5B) + GRPO/DPO/SFT LoRA adapter。
 在 AutoDL 上通过自定义服务端口 6006 暴露。
 """
 
 import os
-import re
 import sys
 
 import gradio as gr
@@ -48,14 +47,22 @@ def _patched_get_type(schema):
 
 _gcu.get_type = _patched_get_type
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 PROJECT = os.environ.get(
     "LSE_PROJECT_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
-MODEL_PATH = os.environ.get("MODEL_PATH", os.path.join(PROJECT, "models", "Qwen2.5-7B-Instruct"))
-DPO_ADAPTER = os.environ.get("DPO_ADAPTER", os.path.join(PROJECT, "outputs", "dpo", "final"))
-SFT_ADAPTER = os.environ.get("SFT_ADAPTER", os.path.join(PROJECT, "outputs", "sft", "final"))
+sys.path.insert(0, PROJECT)
+from lse_v2.dsp import ProductionDSPExecutor, plan_from_prescription  # noqa: E402
+
+MODEL_PATH = os.environ.get("MODEL_PATH", "Qwen/Qwen2.5-1.5B-Instruct")
+GRPO_ADAPTER = os.environ.get(
+    "GRPO_ADAPTER", os.path.join(PROJECT, "outputs", "native_v4", "grpo", "final", "adapter")
+)
+DPO_ADAPTER = os.environ.get(
+    "DPO_ADAPTER", os.path.join(PROJECT, "outputs", "native_v4", "dpo", "final", "adapter")
+)
+SFT_ADAPTER = os.environ.get(
+    "SFT_ADAPTER", os.path.join(PROJECT, "outputs", "native_v4", "sft", "final", "adapter")
+)
 
 SYSTEM_PROMPT = (
     "你是一个专业的语音增强专家，擅长分析音频退化类型、生成可执行的 DSP 增强策略，并解释理由。"
@@ -67,11 +74,16 @@ _tag = None
 
 
 def _adapter():
-    if os.path.exists(os.path.join(DPO_ADAPTER, "adapter_config.json")):
-        return DPO_ADAPTER, "DPO"
-    if os.path.exists(os.path.join(SFT_ADAPTER, "adapter_config.json")):
-        return SFT_ADAPTER, "SFT"
-    raise FileNotFoundError("未找到 DPO/SFT adapter，请先完成训练")
+    for root, tag in ((GRPO_ADAPTER, "GRPO"), (DPO_ADAPTER, "DPO"), (SFT_ADAPTER, "SFT")):
+        direct = os.path.join(root, "adapter_config.json")
+        if os.path.exists(direct):
+            return root, tag
+        if os.path.isdir(root):
+            for child in sorted(os.listdir(root)):
+                candidate = os.path.join(root, child)
+                if os.path.exists(os.path.join(candidate, "adapter_config.json")):
+                    return candidate, tag
+    raise FileNotFoundError("未找到 GRPO/DPO/SFT adapter，请先完成训练")
 
 
 def load_model():
@@ -141,32 +153,6 @@ def extract_features(y, sr):
     return "\n".join(lines)
 
 
-def spectral_subtraction(y, sr, strength=1.0):
-    """轻量谱减降噪：用前 0.3s 估计噪声谱后做减法。"""
-    n_fft, hop = 512, 128
-    S = librosa.stft(y, n_fft=n_fft, hop_length=hop)
-    mag, phase = np.abs(S), np.angle(S)
-    noise_frames = max(1, int(0.3 * sr / hop))
-    noise_mag = np.mean(mag[:, :noise_frames], axis=1, keepdims=True)
-    clean_mag = np.maximum(mag - strength * noise_mag, 0.0)
-    out = librosa.istft(clean_mag * np.exp(1j * phase), hop_length=hop, length=len(y))
-    m = np.max(np.abs(out))
-    return out / m * 0.95 if m > 0 else out
-
-
-def parse_strength(strategy_text):
-    """从策略文本粗略解析降噪强度：重度>轻度；带阻/衰减越大越强。"""
-    s = 1.0
-    if "重度谱减" in strategy_text:
-        s = 1.6
-    elif "轻度谱减" in strategy_text:
-        s = 0.8
-    m = re.search(r"衰减\s*(\d+)\s*dB", strategy_text)
-    if m:
-        s = float(np.clip(int(m.group(1)) / 15.0, 0.5, 2.0))
-    return s
-
-
 def run_text(feature_text, instruction):
     if not feature_text.strip():
         return "请输入音频特征描述（<audio_analysis> 块）。"
@@ -179,7 +165,11 @@ def run_audio(audio_path, instruction):
     y, sr = librosa.load(audio_path, sr=16000, duration=10.0)
     feat = extract_features(y, sr)
     strategy = generate_strategy(feat, instruction)
-    enhanced = spectral_subtraction(y, sr, strength=parse_strength(strategy))
+    try:
+        plan = plan_from_prescription(strategy)
+        enhanced = ProductionDSPExecutor().execute(y.astype(np.float32), sr, plan)
+    except (ValueError, RuntimeError) as exc:
+        return feat, f"处方未通过安全执行器校验：{exc}\n\n原始输出：\n{strategy}", None
     out_path = os.path.join(PROJECT, "outputs", "demo_enhanced.wav")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     sf.write(out_path, enhanced, sr)
@@ -188,7 +178,10 @@ def run_audio(audio_path, instruction):
 
 def build_ui():
     with gr.Blocks(title="LLM 引导的语音增强") as demo:
-        gr.Markdown(f"# LLM 引导的语音增强策略生成\n基座 Qwen2.5-7B + LoRA（{_tag or 'SFT/DPO'}）")
+        gr.Markdown(
+            f"# LLM 引导的语音增强策略生成\n"
+            f"基座 Qwen2.5-1.5B + LoRA（{_tag or 'GRPO/DPO/SFT'}）+ 安全 DSP 执行器"
+        )
         with gr.Tab("文本模式"):
             ft = gr.Textbox(
                 label="音频特征描述",
@@ -218,4 +211,8 @@ def build_ui():
 
 if __name__ == "__main__":
     load_model()
-    build_ui().launch(server_name="0.0.0.0", server_port=6006, share=True)
+    build_ui().launch(
+        server_name=os.environ.get("LSE_DEMO_HOST", "127.0.0.1"),
+        server_port=int(os.environ.get("LSE_DEMO_PORT", "6006")),
+        share=os.environ.get("LSE_DEMO_SHARE", "false").lower() == "true",
+    )

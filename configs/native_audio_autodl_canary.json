@@ -1,0 +1,56 @@
+{
+  "manifest": "../data/native/native_audio.canary.jsonl",
+  "output_dir": "../outputs/native_v4_canary",
+  "whisper_model": "/root/autodl-tmp/lse-v4-models/whisper-small",
+  "language_model": "/root/autodl-tmp/lse-v4-models/Qwen2.5-1.5B-Instruct",
+  "prefix_tokens": 8,
+  "seed": 42,
+  "stages": {
+    "sft": {
+      "max_steps": 1,
+      "batch_size": 1,
+      "gradient_accumulation_steps": 1,
+      "learning_rate": 0.0002,
+      "max_tokens": 256,
+      "audio_dropout": 0.0,
+      "qlora": true,
+      "mixed_precision": "bf16",
+      "gradient_checkpointing": true,
+      "save_steps": 1,
+      "deepspeed": "deepspeed/ds_zero2.json"
+    },
+    "dpo": {
+      "input_stage": "sft",
+      "max_steps": 1,
+      "batch_size": 1,
+      "gradient_accumulation_steps": 1,
+      "learning_rate": 0.00001,
+      "max_tokens": 256,
+      "beta": 0.1,
+      "label_smoothing": 0.1,
+      "qlora": true,
+      "mixed_precision": "bf16",
+      "gradient_checkpointing": true,
+      "save_steps": 1,
+      "deepspeed": "deepspeed/ds_zero2.json"
+    },
+    "grpo": {
+      "input_stage": "dpo",
+      "max_steps": 1,
+      "gradient_accumulation_steps": 1,
+      "learning_rate": 0.000005,
+      "max_tokens": 256,
+      "max_new_tokens": 32,
+      "num_generations": 2,
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "beta": 0.04,
+      "clip_epsilon": 0.2,
+      "qlora": true,
+      "mixed_precision": "bf16",
+      "gradient_checkpointing": false,
+      "save_steps": 1,
+      "deepspeed": "deepspeed/ds_zero2.json"
+    }
+  }
+}

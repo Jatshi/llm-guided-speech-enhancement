@@ -1,0 +1,56 @@
+{
+  "manifest": "../data/native/native_audio.v1.jsonl",
+  "output_dir": "../outputs/native_v4",
+  "whisper_model": "openai/whisper-small",
+  "language_model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "prefix_tokens": 16,
+  "seed": 42,
+  "stages": {
+    "sft": {
+      "max_steps": 1500,
+      "batch_size": 2,
+      "gradient_accumulation_steps": 8,
+      "learning_rate": 0.0002,
+      "max_tokens": 768,
+      "audio_dropout": 0.1,
+      "qlora": true,
+      "mixed_precision": "bf16",
+      "gradient_checkpointing": true,
+      "save_steps": 100,
+      "deepspeed": "deepspeed/ds_zero2.json"
+    },
+    "dpo": {
+      "input_stage": "sft",
+      "max_steps": 800,
+      "batch_size": 1,
+      "gradient_accumulation_steps": 8,
+      "learning_rate": 0.00001,
+      "max_tokens": 768,
+      "beta": 0.1,
+      "label_smoothing": 0.1,
+      "qlora": true,
+      "mixed_precision": "bf16",
+      "gradient_checkpointing": true,
+      "save_steps": 100,
+      "deepspeed": "deepspeed/ds_zero2.json"
+    },
+    "grpo": {
+      "input_stage": "dpo",
+      "max_steps": 300,
+      "gradient_accumulation_steps": 4,
+      "learning_rate": 0.000005,
+      "max_tokens": 768,
+      "max_new_tokens": 192,
+      "num_generations": 4,
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "beta": 0.04,
+      "clip_epsilon": 0.2,
+      "qlora": true,
+      "mixed_precision": "bf16",
+      "gradient_checkpointing": false,
+      "save_steps": 50,
+      "deepspeed": "deepspeed/ds_zero2.json"
+    }
+  }
+}

@@ -1,6 +1,35 @@
-# LLM-Guided Speech Enhancement 3.0
+# LLM-Guided Speech Enhancement 4.0
 
-> **RTX 4090 validated:** native Whisper audio-prefix projection and the
+> **4.0 is a completed native-audio production-hardening run.** It materializes 20,000 physical
+> noisy waveforms, injects frozen-Whisper continuous prefixes into Qwen2.5-1.5B, executes the full
+> SFT → conservative DPO → GRPO chain, runs prescriptions through validated DSP, and accepts or
+> rolls back each candidate from objective measurements. The release model is the **SFT checkpoint**,
+> selected by held-out evidence rather than by assuming the last training stage is best.
+
+## 4.0 verified result
+
+All numbers below come from the same 1,416-example held-out LibriSpeech + ESC-50 test split.
+
+| Evidence | Result |
+|---|---:|
+| SFT valid executable JSON | 1,416 / 1,416 |
+| Cached batched inference | 843.95 s, 1.68 samples/s, 595.97 ms amortized mean |
+| Safety accept / rollback | 66.74% / 33.26% |
+| Mean SI-SDR gain | **+0.451 dB** |
+| Mean PESQ gain | **+0.0407** |
+| Mean STOI gain | **+0.00220** |
+
+Every SNR bucket has positive mean SI-SDR, PESQ, and STOI gain. The safety controller returns the
+original waveform for the 33.26% of candidates that do not prove non-negative SI-SDR gain.
+
+The later stages are retained as auditable negative results: DPO introduced invalid numeric
+placeholders, and GRPO produced invalid JSON on 1,416/1,416 test examples after its reward collapsed
+to zero. Those failures are not hidden or relabeled as improvements. See
+[`docs/V4_RELEASE_NOTES_ZH.md`](docs/V4_RELEASE_NOTES_ZH.md),
+[`docs/V4_LEARNING_AND_FAILURES_ZH.md`](docs/V4_LEARNING_AND_FAILURES_ZH.md), and
+[`docs/AUTODL_V4_RUNBOOK_ZH.md`](docs/AUTODL_V4_RUNBOOK_ZH.md).
+
+> **Legacy 3.0 milestone (RTX 4090):** native Whisper audio-prefix projection and the
 > execute–remeasure–revise/rollback controller are implemented. A two-step real-model
 > smoke reduced loss from 3.31035 to 2.70892 and exported a 7.1MB projector; this is
 > pipeline evidence, not a convergence claim. See [`docs/V3_DEVELOPMENT.md`](docs/V3_DEVELOPMENT.md).
@@ -9,14 +38,15 @@
 
 **让语言模型根据声学证据生成保守、可执行、可验证的语音增强处方。**
 
-[![Release](https://img.shields.io/badge/release-v3.0.0-7C3AED)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v3.0.0)
+[![Release](https://img.shields.io/badge/release-v4.0.0-7C3AED)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v4.0.0)
 [![CI](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-2563EB)](pyproject.toml)
-[![GPU](https://img.shields.io/badge/verified-RTX%204090-76B900)](docs/stage_matrix_4090.json)
+[![GPU](https://img.shields.io/badge/verified-RTX%204080%20SUPER%2032GB-76B900)](docs/V4_RELEASE_NOTES_ZH.md)
+[![v4 SFT](https://img.shields.io/badge/%F0%9F%A4%97-native--audio%20SFT%20v4-FF9D00)](https://huggingface.co/jatshi/LLM-Guided-Speech-Enhancement-v4-SFT)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-Qwen2.5--1.5B%20GRPO%20LoRA-FFD21E)](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
 [![v3 Projector](https://img.shields.io/badge/%F0%9F%A4%97-native%20audio%20projector%20v3-FF9D00)](https://huggingface.co/jatshi/Audio-Codec-LLM-Native-Audio-Projector-v3)
 
-[3.0 新增内容](docs/V3_RELEASE_NOTES_ZH.md) · [3.0 学习与踩坑手册](docs/V3_LEARNING_AND_INTERVIEW_ZH.md) · [完整开发复盘](docs/V3_DEVELOPMENT.md) · [2.0 发布说明](docs/V2_RELEASE_NOTES.md) · [2.0 从零学习](docs/audio_llm_v2_from_scratch_zh.md) · [v3 音频投影器](https://huggingface.co/jatshi/Audio-Codec-LLM-Native-Audio-Projector-v3) · [GRPO LoRA](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
+[4.0 发布说明](docs/V4_RELEASE_NOTES_ZH.md) · [4.0 学习与失败复盘](docs/V4_LEARNING_AND_FAILURES_ZH.md) · [4.0 AutoDL 复现手册](docs/AUTODL_V4_RUNBOOK_ZH.md) · [3.0 新增内容](docs/V3_RELEASE_NOTES_ZH.md) · [2.0 发布说明](docs/V2_RELEASE_NOTES.md)
 
 ![Audio policy 3.0 demo: acoustic evidence to verified prescription](assets/readme/audio_policy_v2_demo.gif)
 
@@ -25,7 +55,7 @@
 > 这不是“LLM 直接修复波形”。系统读取版本化声学证据，输出带退化诊断、DSP 动作、
 > 参数、理由和置信度的结构化策略；每个字段都能被程序 reward 离线复算。
 
-一个面向单张RTX 4090的、可复现的语音增强策略大模型训练项目。2.0将原有硬编码
+一个面向单张 32GB 消费级 GPU、可复现的语音增强策略大模型训练项目。2.0将原有硬编码
 SFT/DPO脚本升级为完整的：
 
 ```text
