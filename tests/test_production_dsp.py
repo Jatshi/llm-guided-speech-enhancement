@@ -20,6 +20,7 @@ def _band_energy(audio: np.ndarray, sample_rate: int, low: float, high: float) -
 
 
 def test_notch_action_reduces_only_target_band() -> None:
+    pytest.importorskip("scipy")
     sample_rate = 16000
     source = 0.5 * _tone(300, sample_rate) + 0.5 * _tone(1000, sample_rate)
     plan = DSPPlan(
@@ -83,6 +84,7 @@ def test_unsafe_or_unknown_actions_fail_closed(action: dict[str, object]) -> Non
 
 
 def test_dereverb_and_spectral_subtraction_keep_shape_and_finite_values() -> None:
+    pytest.importorskip("scipy")
     rng = np.random.default_rng(7)
     source = np.clip(_tone(220) + 0.08 * rng.standard_normal(16000), -1, 1).astype(np.float32)
     plan = DSPPlan(
@@ -106,6 +108,7 @@ def test_dereverb_and_spectral_subtraction_keep_shape_and_finite_values() -> Non
 
 
 def test_stft_istft_round_trip_preserves_waveform() -> None:
+    pytest.importorskip("scipy")
     source = (0.6 * _tone(220, seconds=0.73) + 0.2 * _tone(1700, seconds=0.73)).astype(np.float32)
     executor = ProductionDSPExecutor()
 

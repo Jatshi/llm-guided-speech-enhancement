@@ -50,8 +50,6 @@ def load_grpo_recovery_config(path: str | Path) -> GrpoRecoveryConfig:
 
 
 def validate_source_stage(source_stage_dir: Path) -> dict[str, Any]:
-    from .native_training_pipeline import _saved_adapter_path
-
     manifest_path = source_stage_dir / "artifact_manifest.json"
     projector_path = source_stage_dir / "audio_projector.pt"
     if not manifest_path.is_file():
@@ -64,7 +62,15 @@ def validate_source_stage(source_stage_dir: Path) -> dict[str, Any]:
         or manifest.get("stage") != "sft"
     ):
         raise ValueError("source artifact manifest must prove a native SFT stage")
-    adapter = _saved_adapter_path(source_stage_dir).resolve()
+    adapter_root = source_stage_dir / "adapter"
+    if (adapter_root / "adapter_config.json").is_file():
+        adapter = adapter_root
+    else:
+        candidates = sorted(adapter_root.glob("*/adapter_config.json"))
+        if len(candidates) != 1:
+            raise FileNotFoundError(f"expected exactly one saved adapter below {adapter_root}")
+        adapter = candidates[0].parent
+    adapter = adapter.resolve()
     return {
         "schema_version": "lse.grpo_recovery_source.v1",
         "stage": "sft",

@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("torch")
+
 
 class _ToyTokenizer:
     eos_token_id = 9
