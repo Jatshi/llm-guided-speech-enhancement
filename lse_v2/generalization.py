@@ -66,9 +66,7 @@ def _snr_bin(value: Any) -> str:
     return "high_>=20"
 
 
-def _failed_prediction_result(
-    row: dict[str, Any], prediction: dict[str, Any]
-) -> dict[str, Any]:
+def _failed_prediction_result(row: dict[str, Any], prediction: dict[str, Any]) -> dict[str, Any]:
     """Represent an unusable policy output as an explicit safety rollback."""
 
     provenance = row.get("provenance", {})

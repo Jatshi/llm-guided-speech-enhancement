@@ -106,9 +106,7 @@ def test_dereverb_and_spectral_subtraction_keep_shape_and_finite_values() -> Non
 
 
 def test_stft_istft_round_trip_preserves_waveform() -> None:
-    source = (0.6 * _tone(220, seconds=0.73) + 0.2 * _tone(1700, seconds=0.73)).astype(
-        np.float32
-    )
+    source = (0.6 * _tone(220, seconds=0.73) + 0.2 * _tone(1700, seconds=0.73)).astype(np.float32)
     executor = ProductionDSPExecutor()
 
     _frequencies, _times, spectrum = executor._stft(source, 16000)
