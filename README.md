@@ -1,4 +1,38 @@
-# LLM-Guided Speech Enhancement 4.0
+# LLM-Guided Speech Enhancement 4.1 — Verified GRPO Recovery
+
+> **4.1 已在 RTX 3080 Ti 12GB 上完成 300-step 真实 GRPO、1,416 条完整测试集推理、
+> DSP 泛化评测和 SFT 对照晋升门禁。** 修复版从已验证的 SFT adapter 启动，加入
+> 连续参数校准 reward、SFT anchor、真实生成 canary、reward 饱和 fail-fast 和留出集
+> 晋升门禁。最终 GRPO 有效 JSON 率为 100%，平均可验证 reward 从 SFT 的 0.95382
+> 提升到 0.97632，验收状态为 `passed`。设计与失败复盘见
+> [`docs/V4_1_GRPO_RECOVERY_ZH.md`](docs/V4_1_GRPO_RECOVERY_ZH.md)，完整实测结果见
+> [`docs/V4_1_RESULTS_ZH.md`](docs/V4_1_RESULTS_ZH.md)。
+
+AutoDL 一键入口：
+
+```bash
+export LSE_GRPO_RECOVERY_MODE=all
+bash scripts/autodl_v4_1_grpo_recovery.sh
+```
+
+该入口复用 `outputs/native_v4/sft/final` 和已有 Whisper embedding cache，不重跑 SFT/DPO；
+先执行 12-step 短 canary，通过后才启动 300-step 正式 GRPO 和全量测试。
+
+## 4.1 verified result
+
+| Evidence | Result |
+|---|---:|
+| Pre-training canary | 48/48 valid JSON; 12/12 non-saturated groups |
+| GRPO training | 300 steps; 1,200 groups; 99.15% sampled JSON valid |
+| Training reward signal | 99.83% non-saturated; longest saturated run = 1 group |
+| Held-out inference | 1,416/1,416 successful; 0 placeholders |
+| SFT → recovered GRPO reward | 0.95382 → **0.97632** |
+| Mean SI-SDR / PESQ / STOI gain | +0.3547 dB / +0.04056 / +0.00260 |
+| Safety accept / rollback | 68.15% / 31.85% |
+| Promotion gate | **passed** |
+
+The recovered adapter is published at
+[Hugging Face: `jatshi/LLM-Guided-Speech-Enhancement-v4.1-GRPO`](https://huggingface.co/jatshi/LLM-Guided-Speech-Enhancement-v4.1-GRPO).
 
 > **4.0 is a completed native-audio production-hardening run.** It materializes 20,000 physical
 > noisy waveforms, injects frozen-Whisper continuous prefixes into Qwen2.5-1.5B, executes the full
@@ -38,15 +72,16 @@ to zero. Those failures are not hidden or relabeled as improvements. See
 
 **让语言模型根据声学证据生成保守、可执行、可验证的语音增强处方。**
 
-[![Release](https://img.shields.io/badge/release-v4.0.0-7C3AED)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v4.0.0)
+[![Release](https://img.shields.io/badge/release-v4.1.0-7C3AED)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v4.1.0)
 [![CI](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-2563EB)](pyproject.toml)
-[![GPU](https://img.shields.io/badge/verified-RTX%204080%20SUPER%2032GB-76B900)](docs/V4_RELEASE_NOTES_ZH.md)
+[![GPU](https://img.shields.io/badge/verified-RTX%203080%20Ti%2012GB-76B900)](docs/V4_1_RESULTS_ZH.md)
+[![v4.1 GRPO](https://img.shields.io/badge/%F0%9F%A4%97-v4.1%20recovered%20GRPO-FF9D00)](https://huggingface.co/jatshi/LLM-Guided-Speech-Enhancement-v4.1-GRPO)
 [![v4 SFT](https://img.shields.io/badge/%F0%9F%A4%97-native--audio%20SFT%20v4-FF9D00)](https://huggingface.co/jatshi/LLM-Guided-Speech-Enhancement-v4-SFT)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-Qwen2.5--1.5B%20GRPO%20LoRA-FFD21E)](https://huggingface.co/jatshi/Audio-Codec-LLM-Qwen2.5-1.5B-GRPO-LoRA)
 [![v3 Projector](https://img.shields.io/badge/%F0%9F%A4%97-native%20audio%20projector%20v3-FF9D00)](https://huggingface.co/jatshi/Audio-Codec-LLM-Native-Audio-Projector-v3)
 
-[4.0 发布说明](docs/V4_RELEASE_NOTES_ZH.md) · [4.0 学习与失败复盘](docs/V4_LEARNING_AND_FAILURES_ZH.md) · [4.0 AutoDL 复现手册](docs/AUTODL_V4_RUNBOOK_ZH.md) · [3.0 新增内容](docs/V3_RELEASE_NOTES_ZH.md) · [2.0 发布说明](docs/V2_RELEASE_NOTES.md)
+[4.1 实测结果](docs/V4_1_RESULTS_ZH.md) · [4.1 GRPO 修复原理](docs/V4_1_GRPO_RECOVERY_ZH.md) · [4.0 发布说明](docs/V4_RELEASE_NOTES_ZH.md) · [4.0 学习与失败复盘](docs/V4_LEARNING_AND_FAILURES_ZH.md) · [4.0 AutoDL 复现手册](docs/AUTODL_V4_RUNBOOK_ZH.md) · [3.0 新增内容](docs/V3_RELEASE_NOTES_ZH.md) · [2.0 发布说明](docs/V2_RELEASE_NOTES.md)
 
 ![Audio policy 3.0 demo: acoustic evidence to verified prescription](assets/readme/audio_policy_v2_demo.gif)
 

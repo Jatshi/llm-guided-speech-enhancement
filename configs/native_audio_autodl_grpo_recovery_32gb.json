@@ -1,0 +1,49 @@
+{
+  "manifest": "../data/native/native_audio.v1.jsonl",
+  "output_dir": "../outputs/native_v4_1_grpo",
+  "whisper_model": "/root/autodl-tmp/lse-v4-models/whisper-small",
+  "language_model": "/root/autodl-tmp/lse-v4-models/Qwen2.5-1.5B-Instruct",
+  "prefix_tokens": 16,
+  "seed": 42,
+  "stages": {
+    "sft": {
+      "max_steps": 1500,
+      "learning_rate": 0.0002
+    },
+    "dpo": {
+      "input_stage": "sft",
+      "max_steps": 800,
+      "learning_rate": 0.00001,
+      "beta": 0.1,
+      "label_smoothing": 0.1
+    },
+    "grpo": {
+      "input_stage": "sft",
+      "max_steps": 300,
+      "gradient_accumulation_steps": 4,
+      "learning_rate": 0.000002,
+      "max_tokens": 768,
+      "max_new_tokens": 256,
+      "num_generations": 6,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "beta": 0.02,
+      "clip_epsilon": 0.2,
+      "sft_anchor_weight": 0.05,
+      "canary_groups": 12,
+      "min_canary_valid_json_rate": 0.8,
+      "min_canary_non_saturated_group_rate": 0.2,
+      "max_consecutive_saturated_groups": 16,
+      "qlora": true,
+      "mixed_precision": "bf16",
+      "gradient_checkpointing": false,
+      "save_steps": 50,
+      "save_total_limit": 2,
+      "deepspeed": "deepspeed/ds_zero2.json"
+    }
+  },
+  "recovery": {
+    "source_stage_dir": "../outputs/native_v4/sft/final",
+    "audio_cache_dir": "../outputs/native_v4/audio_embedding_cache"
+  }
+}

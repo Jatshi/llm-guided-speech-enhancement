@@ -4,9 +4,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_ROOT="${LSE_DATA_ROOT:-/root/autodl-tmp/lse-v4-data}"
 MIN_FREE_GIB="${LSE_MIN_FREE_GIB:-80}"
+MIN_VRAM_GIB="${LSE_MIN_VRAM_GIB:-20}"
 CONNECTIVITY_URL="${LSE_CONNECTIVITY_URL:-https://huggingface.co/}"
 
 python - <<'PY'
+import os
 import shutil
 import torch
 
@@ -14,8 +16,9 @@ if not torch.cuda.is_available():
     raise SystemExit("CUDA is not visible")
 props = torch.cuda.get_device_properties(0)
 print(f"GPU={props.name} VRAM_GiB={props.total_memory / 1024**3:.2f}")
-if props.total_memory < 20 * 1024**3:
-    raise SystemExit("at least 20 GiB VRAM is required by the checked-in profile")
+minimum = float(os.environ["LSE_MIN_VRAM_GIB"])
+if props.total_memory < minimum * 1024**3:
+    raise SystemExit(f"at least {minimum:g} GiB VRAM is required by this profile")
 PY
 
 mkdir -p "$DATA_ROOT"

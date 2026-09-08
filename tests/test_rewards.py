@@ -51,11 +51,48 @@ def test_overprocessing_is_penalized() -> None:
     assert any("over" in item or "range" in item for item in score.violations)
 
 
+def test_parameter_reward_is_continuously_calibrated_to_degradation_target() -> None:
+    target = good_response()
+    farther = json.loads(target)
+    farther["actions"][0]["reduction_db"] = 16.0
+    context = {
+        "noise_type": "white",
+        "snr_db": 10.0,
+        "expected_response": target,
+    }
+
+    matched = score_prescription(target, context)
+    deviated = score_prescription(json.dumps(farther), context)
+
+    assert matched.parameter_bounds == pytest.approx(1.0)
+    assert 0 < deviated.parameter_bounds < matched.parameter_bounds
+    assert deviated.total < matched.total
+
+
 def test_invalid_json_has_no_format_or_parameter_reward() -> None:
     score = score_prescription("not-json", {"noise_type": "white"})
     assert score.format == 0
     assert score.parameter_bounds == 0
     assert not score.valid_json
+
+
+def test_json_prefix_receives_bounded_progress_reward_without_rewarding_placeholders() -> None:
+    truncated = (
+        '{"diagnosis":{"noise_type":"white"},"actions":[],"rationale":"measured","confidence":0.'
+    )
+    placeholder = (
+        '{"diagnosis":{"noise_type":"white"},"actions":'
+        '[{"type":"denoise","reduction_db":?}],"rationale":"x","confidence":0.8}'
+    )
+
+    progress = score_prescription(truncated, {"noise_type": "white"})
+    rejected = score_prescription(placeholder, {"noise_type": "white"})
+
+    assert not progress.valid_json
+    assert 0 < progress.format <= 0.15
+    assert progress.total <= 0.03
+    assert rejected.format == 0
+    assert rejected.total == 0
 
 
 def test_grpo_reward_accepts_conversational_completions() -> None:
