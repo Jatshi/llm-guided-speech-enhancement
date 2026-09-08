@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("torch")
+
 
 class _ToyTokenizer:
     eos_token_id = 9
@@ -48,6 +50,28 @@ def test_grpo_surrogate_has_gradient_and_kl_penalty() -> None:
     assert torch.isfinite(loss)
     assert policy.grad is not None and torch.count_nonzero(policy.grad) > 0
     assert stats["kl"] >= 0
+
+
+def test_sft_anchor_preserves_training_signal_when_group_advantages_are_zero() -> None:
+    torch = pytest.importorskip("torch")
+    from lse_v2.native_training_pipeline import combine_grpo_and_anchor_loss
+
+    parameter = torch.tensor(1.0, requires_grad=True)
+    zero_signal_grpo = parameter * 0
+    anchor_loss = parameter.square()
+
+    loss, stats = combine_grpo_and_anchor_loss(
+        zero_signal_grpo,
+        anchor_loss,
+        anchor_weight=0.05,
+        group_saturated=True,
+    )
+    loss.backward()
+
+    assert parameter.grad is not None
+    assert parameter.grad.item() != 0
+    assert stats["anchor_weight"] == pytest.approx(0.05)
+    assert stats["group_saturated"] is True
 
 
 def test_stage_checkpoint_pruning_keeps_latest_numeric_steps(tmp_path: Path) -> None:
@@ -142,3 +166,16 @@ def test_accelerator_checkpoint_uses_non_strict_module_load_for_deepspeed(
     _load_accelerator_checkpoint(accelerator, checkpoint)
 
     assert accelerator.call == (str(checkpoint), {"load_module_strict": False})
+
+
+def test_kbit_checkpointing_is_non_reentrant_for_deepspeed() -> None:
+    from lse_v2.native_training_pipeline import _kbit_training_kwargs
+
+    assert _kbit_training_kwargs({"gradient_checkpointing": True}) == {
+        "use_gradient_checkpointing": True,
+        "gradient_checkpointing_kwargs": {"use_reentrant": False},
+    }
+    assert _kbit_training_kwargs({"gradient_checkpointing": False}) == {
+        "use_gradient_checkpointing": False,
+        "gradient_checkpointing_kwargs": None,
+    }

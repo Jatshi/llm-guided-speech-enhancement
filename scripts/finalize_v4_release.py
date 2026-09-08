@@ -198,12 +198,7 @@ def finalize(repo_root: Path, output_root: Path, release_dir: Path) -> dict[str,
         *(output_root / stage / "stage_manifest.json" for stage in ("sft", "dpo", "grpo")),
         *(output_root / stage / "final" / "audio_projector.pt" for stage in ("sft", "dpo", "grpo")),
         *(
-            output_root
-            / stage
-            / "final"
-            / "adapter"
-            / stage
-            / "adapter_model.safetensors"
+            output_root / stage / "final" / "adapter" / stage / "adapter_model.safetensors"
             for stage in ("sft", "dpo", "grpo")
         ),
         sft_predictions_path,

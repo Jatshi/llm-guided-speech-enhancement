@@ -58,7 +58,7 @@ def completion_text(completion: Any) -> str:
     return str(completion)
 
 
-def parse_prescription(text: str) -> dict[str, Any] | None:
+def _json_candidate(text: str) -> str:
     candidate = text.strip()
     if candidate.startswith("```"):
         lines = candidate.splitlines()
@@ -67,6 +67,11 @@ def parse_prescription(text: str) -> dict[str, Any] | None:
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         candidate = "\n".join(lines)
+    return candidate.strip()
+
+
+def parse_prescription(text: str) -> dict[str, Any] | None:
+    candidate = _json_candidate(text)
     try:
         parsed = json.loads(candidate)
     except json.JSONDecodeError:
@@ -74,10 +79,37 @@ def parse_prescription(text: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _format_reward(payload: dict[str, Any] | None, violations: list[str]) -> float:
+def _invalid_json_progress(text: str) -> float:
+    """Give a tiny, bounded shaping reward to a plausible truncated JSON object.
+
+    The shaping reward is deliberately too small to beat any valid response. It
+    only distinguishes partial JSON prefixes during early GRPO exploration. Known
+    placeholder syntax is rejected so the v4.0 DPO failure cannot be reinforced.
+    """
+
+    candidate = _json_candidate(text)
+    if not candidate.startswith("{") or "?" in candidate or len(candidate) > 4096:
+        return 0.0
+    try:
+        json.loads(candidate)
+    except json.JSONDecodeError as exc:
+        parse_progress = min(1.0, max(0.0, exc.pos / max(1, len(candidate))))
+    else:
+        return 0.0
+    required_keys = ("diagnosis", "actions", "rationale", "confidence")
+    key_fraction = sum(f'"{key}"' in candidate for key in required_keys) / len(required_keys)
+    # Merely opening an object is worth 0.01. Reaching required keys and a late
+    # parser position can raise this to at most 0.15.
+    return min(0.15, 0.01 + 0.08 * key_fraction + 0.06 * parse_progress)
+
+
+def _format_reward(text: str, payload: dict[str, Any] | None, violations: list[str]) -> float:
     if payload is None:
         violations.append("invalid_json")
-        return 0.0
+        progress = _invalid_json_progress(text)
+        if progress:
+            violations.append("partial_json_progress")
+        return progress
     required = {"diagnosis", "actions", "rationale", "confidence"}
     missing = required.difference(payload)
     if missing:
@@ -124,7 +156,68 @@ def _diagnosis_reward(
     return score
 
 
-def _parameter_bounds_reward(payload: dict[str, Any] | None, violations: list[str]) -> float:
+def _parameter_calibration_reward(payload: dict[str, Any], context: dict[str, Any]) -> float:
+    """Score numeric actions against the known synthetic degradation recipe.
+
+    Native training data is generated from measured degradation parameters, so
+    this is deterministic ground truth rather than an LLM-as-a-judge score.
+    Missing ground truth remains neutral to preserve external-data behavior.
+    """
+
+    expected_raw = context.get("expected_response")
+    expected = (
+        expected_raw
+        if isinstance(expected_raw, dict)
+        else parse_prescription(expected_raw)
+        if isinstance(expected_raw, str)
+        else None
+    )
+    if expected is None:
+        return 1.0
+    candidate_actions = payload.get("actions")
+    expected_actions = expected.get("actions")
+    if not isinstance(candidate_actions, list) or not isinstance(expected_actions, list):
+        return 0.0
+    numeric_keys = (
+        "reduction_db",
+        "gain_db",
+        "low_hz",
+        "high_hz",
+        "q",
+        "gate_quantile",
+        "peak",
+    )
+    scores: list[float] = []
+    for target_action in expected_actions:
+        if not isinstance(target_action, dict):
+            continue
+        action_type = str(target_action.get("type", "")).lower()
+        candidate = next(
+            (
+                action
+                for action in candidate_actions
+                if isinstance(action, dict) and str(action.get("type", "")).lower() == action_type
+            ),
+            None,
+        )
+        for key in numeric_keys:
+            target = _finite_number(target_action.get(key))
+            if target is None:
+                continue
+            observed = _finite_number(candidate.get(key) if candidate is not None else None)
+            if observed is None:
+                scores.append(0.0)
+                continue
+            scale = max(abs(target), 1.0)
+            scores.append(max(0.0, 1.0 - abs(observed - target) / scale))
+    return sum(scores) / len(scores) if scores else 1.0
+
+
+def _parameter_bounds_reward(
+    payload: dict[str, Any] | None,
+    context: dict[str, Any],
+    violations: list[str],
+) -> float:
     if payload is None or not isinstance(payload.get("actions"), list):
         return 0.0
     checks = 0
@@ -161,7 +254,9 @@ def _parameter_bounds_reward(payload: dict[str, Any] | None, violations: list[st
     if checks == 0:
         violations.append("no_executable_parameters")
         return 0.0
-    return passed / checks
+    bounds_score = passed / checks
+    calibration_score = _parameter_calibration_reward(payload, context)
+    return 0.5 * bounds_score + 0.5 * calibration_score
 
 
 def _consistency_reward(
@@ -241,9 +336,9 @@ def score_prescription(
     payload = parse_prescription(text)
     violations: list[str] = []
     components = {
-        "format": _format_reward(payload, violations),
+        "format": _format_reward(text, payload, violations),
         "diagnosis": _diagnosis_reward(payload, context, violations),
-        "parameter_bounds": _parameter_bounds_reward(payload, violations),
+        "parameter_bounds": _parameter_bounds_reward(payload, context, violations),
         "consistency": _consistency_reward(payload, context, violations),
         "overprocessing": _overprocessing_reward(payload, context, violations),
     }

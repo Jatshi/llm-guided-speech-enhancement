@@ -25,7 +25,8 @@ import numpy as np
 
 from .audio_conditioning import AudioConditioningConfig, AudioPrefixProjector
 from .config import find_latest_checkpoint, set_global_seed
-from .io import git_commit, utc_now, write_json_atomic, write_jsonl
+from .grpo_control import evaluate_canary_gate, summarize_reward_group
+from .io import git_commit, read_jsonl, utc_now, write_json_atomic, write_jsonl
 from .native_alignment import (
     conservative_dpo_loss,
     masked_sequence_log_probability,
@@ -83,6 +84,135 @@ def grpo_surrogate_loss(
         "policy_loss": float(policy_term.detach().cpu()),
         "kl": float(kl.detach().cpu()),
     }
+
+
+def combine_grpo_and_anchor_loss(
+    grpo_loss,
+    anchor_loss,
+    *,
+    anchor_weight: float,
+    group_saturated: bool,
+):
+    """Add a supervised format anchor so a tied group cannot become KL-only training."""
+
+    if anchor_weight < 0:
+        raise ValueError("anchor_weight must be non-negative")
+    loss = grpo_loss + anchor_weight * anchor_loss
+    return loss, {
+        "anchor_loss": float(anchor_loss.detach().cpu()),
+        "anchor_weight": anchor_weight,
+        "group_saturated": bool(group_saturated),
+    }
+
+
+def resolve_stage_input_dir(
+    config: NativePipelineConfig,
+    stage: str,
+    stage_outputs: dict[str, Path],
+) -> Path | None:
+    input_stage = config.stages[stage].get("input_stage")
+    if input_stage is None:
+        return None
+    try:
+        return stage_outputs[str(input_stage)]
+    except KeyError as exc:
+        raise RuntimeError(f"{stage} requires unavailable input stage {input_stage!r}") from exc
+
+
+def _sample_grpo_group(
+    model: Any,
+    tokenizer: Any,
+    batch: dict[str, Any],
+    row: dict[str, Any],
+    params: dict[str, Any],
+) -> tuple[list[str], list[Any]]:
+    """Sample and deterministically score one prompt group."""
+
+    import torch
+
+    generations = int(params.get("num_generations", 4))
+    model.eval()
+    with torch.no_grad():
+        generated = model.generate_with_audio(
+            encoded_audio=batch["encoded_audio"],
+            audio_frame_mask=batch["audio_frame_mask"],
+            audio_present=batch["audio_present"],
+            input_ids=batch["input_ids"],
+            token_attention_mask=batch["token_attention_mask"],
+            do_sample=True,
+            use_cache=True,
+            temperature=float(params.get("temperature", 1.0)),
+            top_p=float(params.get("top_p", 0.95)),
+            max_new_tokens=int(params.get("max_new_tokens", 192)),
+            num_return_sequences=generations,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+        )
+    decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
+    completions = [text.strip() for text in decoded]
+    breakdowns = [score_prescription(text, row["reward_context"]) for text in completions]
+    return completions, breakdowns
+
+
+def _run_grpo_canary(
+    *,
+    accelerator: Any,
+    model: Any,
+    tokenizer: Any,
+    loader: Any,
+    params: dict[str, Any],
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Probe real generations before the first optimizer update and fail closed."""
+
+    groups = int(params.get("canary_groups", 8))
+    if groups <= 0:
+        raise ValueError("grpo.canary_groups must be positive")
+    iterator = iter(loader)
+    scored_groups: list[list[Any]] = []
+    samples: list[dict[str, Any]] = []
+    unwrapped = accelerator.unwrap_model(model)
+    for group_index in range(groups):
+        try:
+            batch = next(iterator)
+        except StopIteration:
+            iterator = iter(loader)
+            batch = next(iterator)
+        rows = batch.pop("rows")
+        batch = _to_device(batch, accelerator.device)
+        completions, breakdowns = _sample_grpo_group(unwrapped, tokenizer, batch, rows[0], params)
+        scored_groups.append(breakdowns)
+        print(
+            f"grpo_canary group={group_index + 1}/{groups} "
+            f"summary={summarize_reward_group(breakdowns).to_dict()}",
+            flush=True,
+        )
+        for completion, breakdown in zip(completions, breakdowns, strict=True):
+            if len(samples) >= 24:
+                break
+            samples.append(
+                {
+                    "group": group_index,
+                    "completion": completion,
+                    "reward": breakdown.to_dict(),
+                }
+            )
+    report = evaluate_canary_gate(
+        scored_groups,
+        min_valid_json_rate=float(params.get("min_canary_valid_json_rate", 0.8)),
+        min_non_saturated_group_rate=float(params.get("min_canary_non_saturated_group_rate", 0.2)),
+    )
+    report["samples"] = samples
+    if accelerator.is_main_process:
+        write_json_atomic(output_dir / "canary_report.json", report)
+    accelerator.wait_for_everyone()
+    if report["status"] != "passed":
+        checks = ", ".join(report["failed_checks"])
+        raise RuntimeError(
+            "GRPO canary failed before any optimizer step: "
+            f"{checks}; inspect {output_dir / 'canary_report.json'}"
+        )
+    return report
 
 
 def _sha256_file(path: Path) -> str:
@@ -208,6 +338,7 @@ def precompute_audio_embeddings(
             }
         if (offset // batch_size + 1) % 16 == 0:
             write_jsonl(index_path, [row for row in cached if row is not None])
+            print(f"audio_cache encoded={offset + len(chunk)}/{len(pending)}", flush=True)
     completed_cache = [row for row in cached if row is not None]
     if len(completed_cache) != len(records):
         raise RuntimeError("audio embedding cache did not cover every record")
@@ -441,6 +572,16 @@ def _to_device(batch: dict[str, Any], device: Any) -> dict[str, Any]:
     return {key: move(value) for key, value in batch.items()}
 
 
+def _kbit_training_kwargs(params: dict[str, Any]) -> dict[str, Any]:
+    enabled = bool(params.get("gradient_checkpointing", True))
+    return {
+        "use_gradient_checkpointing": enabled,
+        # Reentrant checkpointing can invoke hooks for a shared LoRA parameter
+        # twice. DeepSpeed ZeRO-2 rejects that second reduction.
+        "gradient_checkpointing_kwargs": {"use_reentrant": False} if enabled else None,
+    }
+
+
 def _load_language_model(config: NativePipelineConfig, stage: str, input_dir: Path | None):
     import torch
     from peft import (
@@ -469,9 +610,7 @@ def _load_language_model(config: NativePipelineConfig, stage: str, input_dir: Pa
     base = AutoModelForCausalLM.from_pretrained(config.language_model, **model_kwargs)
     base.config.use_cache = False
     if qlora:
-        base = prepare_model_for_kbit_training(
-            base, use_gradient_checkpointing=bool(params.get("gradient_checkpointing", True))
-        )
+        base = prepare_model_for_kbit_training(base, **_kbit_training_kwargs(params))
     lora = LoraConfig(
         r=int(params.get("lora_r", 16)),
         lora_alpha=int(params.get("lora_alpha", 32)),
@@ -724,8 +863,51 @@ def _run_stage(
     max_steps = int(params["max_steps"])
     losses: list[float] = []
     reward_values: list[float] = []
+    anchor_losses: list[float] = []
+    policy_losses: list[float] = []
+    kl_values: list[float] = []
+    valid_json_generations = 0
+    total_generations = 0
     saturated_groups = 0
+    total_groups = 0
+    consecutive_saturated_groups = 0
+    max_observed_consecutive_saturated_groups = 0
+    diagnostics: list[dict[str, Any]] = []
+    diagnostics_path = output_dir / "grpo_diagnostics.jsonl"
+    if stage == "grpo" and resume is not None and diagnostics_path.is_file():
+        diagnostics = read_jsonl(diagnostics_path)
+        for item in diagnostics:
+            rewards = item.get("rewards", [])
+            reward_values.extend(float(reward.get("total", 0.0)) for reward in rewards)
+            total_generations += len(rewards)
+            valid_json_generations += sum(bool(reward.get("valid_json")) for reward in rewards)
+            total_groups += 1
+            saturated = bool(item.get("saturated"))
+            saturated_groups += int(saturated)
+            consecutive_saturated_groups = consecutive_saturated_groups + 1 if saturated else 0
+            max_observed_consecutive_saturated_groups = max(
+                max_observed_consecutive_saturated_groups,
+                consecutive_saturated_groups,
+            )
+            training = item.get("training", {})
+            if training.get("anchor_loss") is not None:
+                anchor_losses.append(float(training["anchor_loss"]))
+            if training.get("policy_loss") is not None:
+                policy_losses.append(float(training["policy_loss"]))
+            if training.get("kl") is not None:
+                kl_values.append(float(training["kl"]))
     started = time.perf_counter()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    canary_report = None
+    if stage == "grpo":
+        canary_report = _run_grpo_canary(
+            accelerator=accelerator,
+            model=model,
+            tokenizer=tokenizer,
+            loader=loader,
+            params=params,
+            output_dir=output_dir,
+        )
     iterator = iter(loader)
     while completed < max_steps:
         try:
@@ -771,34 +953,55 @@ def _run_stage(
             else:
                 unwrapped = accelerator.unwrap_model(model)
                 generations = int(params.get("num_generations", 4))
-                unwrapped.eval()
-                with torch.no_grad():
-                    generated = unwrapped.generate_with_audio(
-                        encoded_audio=batch["encoded_audio"],
-                        audio_frame_mask=batch["audio_frame_mask"],
-                        audio_present=batch["audio_present"],
-                        input_ids=batch["input_ids"],
-                        token_attention_mask=batch["token_attention_mask"],
-                        do_sample=True,
-                        temperature=float(params.get("temperature", 1.0)),
-                        top_p=float(params.get("top_p", 0.95)),
-                        max_new_tokens=int(params.get("max_new_tokens", 192)),
-                        num_return_sequences=generations,
-                        pad_token_id=tokenizer.pad_token_id,
-                        eos_token_id=tokenizer.eos_token_id,
-                    )
-                completions = tokenizer.batch_decode(generated, skip_special_tokens=True)
+                completions, breakdowns = _sample_grpo_group(
+                    unwrapped, tokenizer, batch, rows[0], params
+                )
                 rewards = torch.tensor(
-                    [
-                        score_prescription(text, rows[0]["reward_context"]).total
-                        for text in completions
-                    ],
+                    [item.total for item in breakdowns],
                     dtype=torch.float32,
                     device=accelerator.device,
                 ).view(1, -1)
                 reward_values.extend(rewards.flatten().tolist())
                 advantages = normalized_group_advantages(rewards)
-                saturated_groups += int(torch.count_nonzero(advantages).item() == 0)
+                group_summary = summarize_reward_group(breakdowns)
+                group_saturated = group_summary.saturated
+                total_groups += 1
+                total_generations += len(breakdowns)
+                valid_json_generations += sum(item.valid_json for item in breakdowns)
+                saturated_groups += int(group_saturated)
+                consecutive_saturated_groups = (
+                    consecutive_saturated_groups + 1 if group_saturated else 0
+                )
+                max_observed_consecutive_saturated_groups = max(
+                    max_observed_consecutive_saturated_groups,
+                    consecutive_saturated_groups,
+                )
+                diagnostics.append(
+                    {
+                        "group": total_groups,
+                        **group_summary.to_dict(),
+                        "rewards": [item.to_dict() for item in breakdowns],
+                    }
+                )
+                max_consecutive = int(params.get("max_consecutive_saturated_groups", 16))
+                if consecutive_saturated_groups >= max_consecutive:
+                    collapse_report = {
+                        "schema_version": "lse.grpo_collapse.v1",
+                        "status": "aborted",
+                        "reason": "consecutive_saturated_groups",
+                        "groups": total_groups,
+                        "consecutive_saturated_groups": consecutive_saturated_groups,
+                        "limit": max_consecutive,
+                        "valid_json_rate": valid_json_generations / total_generations,
+                    }
+                    if accelerator.is_main_process:
+                        write_json_atomic(output_dir / "collapse_report.json", collapse_report)
+                        write_jsonl(output_dir / "grpo_diagnostics.jsonl", diagnostics)
+                    raise RuntimeError(
+                        "GRPO reward remained tied for "
+                        f"{consecutive_saturated_groups} consecutive groups; aborting instead "
+                        "of performing KL-only updates"
+                    )
                 repeated = [rows[0] for _ in completions]
                 audio_repeat = _to_device(_audio_batch(repeated), accelerator.device)
                 response_batch = _to_device(
@@ -829,7 +1032,7 @@ def _run_stage(
                         model, group_batch, response_batch, unwrapped.reference_adapter
                     ).view(1, -1)
                 unwrapped.language_model.set_adapter(unwrapped.policy_adapter)
-                loss, _grpo_stats = grpo_surrogate_loss(
+                grpo_loss, grpo_stats = grpo_surrogate_loss(
                     policy_logps,
                     policy_logps.detach(),
                     reference_logps,
@@ -837,6 +1040,44 @@ def _run_stage(
                     beta=float(params.get("beta", 0.04)),
                     clip_epsilon=float(params.get("clip_epsilon", 0.2)),
                 )
+                anchor_response = _to_device(
+                    _pad_examples(
+                        tokenizer,
+                        [
+                            build_lm_example(
+                                tokenizer,
+                                rows[0]["prompt_text"],
+                                rows[0]["chosen_text"],
+                                int(params.get("max_tokens", 768)),
+                            )
+                        ],
+                    ),
+                    accelerator.device,
+                )
+                anchor_output = model(
+                    encoded_audio=batch["encoded_audio"],
+                    audio_frame_mask=batch["audio_frame_mask"],
+                    audio_present=batch["audio_present"],
+                    input_ids=anchor_response["input_ids"],
+                    token_attention_mask=anchor_response["token_attention_mask"],
+                    labels=anchor_response["labels"],
+                    adapter_name=unwrapped.policy_adapter,
+                )
+                loss, anchor_stats = combine_grpo_and_anchor_loss(
+                    grpo_loss,
+                    anchor_output.loss,
+                    anchor_weight=float(params.get("sft_anchor_weight", 0.05)),
+                    group_saturated=group_saturated,
+                )
+                anchor_losses.append(anchor_stats["anchor_loss"])
+                policy_losses.append(grpo_stats["policy_loss"])
+                kl_values.append(grpo_stats["kl"])
+                diagnostics[-1]["training"] = {
+                    "anchor_loss": anchor_stats["anchor_loss"],
+                    "anchor_weight": anchor_stats["anchor_weight"],
+                    "policy_loss": grpo_stats["policy_loss"],
+                    "kl": grpo_stats["kl"],
+                }
             if not torch.isfinite(loss):
                 raise RuntimeError(f"{stage} produced non-finite loss")
             accelerator.backward(loss)
@@ -849,6 +1090,13 @@ def _run_stage(
             continue
         completed += 1
         losses.append(float(loss.detach().cpu()))
+        if stage == "grpo" and accelerator.is_main_process:
+            print(
+                f"grpo step={completed}/{max_steps} loss={losses[-1]:.6f} "
+                f"valid_json={valid_json_generations / total_generations:.3f} "
+                f"non_saturated={(total_groups - saturated_groups) / total_groups:.3f}",
+                flush=True,
+            )
         save_steps = int(params.get("save_steps", 50))
         if completed % save_steps == 0 and completed < max_steps:
             checkpoint = output_dir / f"checkpoint-{completed}"
@@ -856,6 +1104,8 @@ def _run_stage(
             if accelerator.is_main_process:
                 write_json_atomic(checkpoint / "trainer_state.json", {"step": completed})
                 _prune_stage_checkpoints(output_dir, keep=int(params.get("save_total_limit", 2)))
+                if stage == "grpo":
+                    write_jsonl(diagnostics_path, diagnostics)
     final_dir = output_dir / "final"
     _save_stage(accelerator, model, tokenizer, final_dir, stage)
     report = {
@@ -869,11 +1119,31 @@ def _run_stage(
         "loss_mean": sum(losses) / len(losses) if losses else None,
         "mean_reward": sum(reward_values) / len(reward_values) if reward_values else None,
         "saturated_groups": saturated_groups if stage == "grpo" else None,
+        "total_groups": total_groups if stage == "grpo" else None,
+        "non_saturated_group_rate": (
+            (total_groups - saturated_groups) / total_groups
+            if stage == "grpo" and total_groups
+            else None
+        ),
+        "valid_json_rate": (
+            valid_json_generations / total_generations
+            if stage == "grpo" and total_generations
+            else None
+        ),
+        "max_consecutive_saturated_groups": (
+            max_observed_consecutive_saturated_groups if stage == "grpo" else None
+        ),
+        "mean_anchor_loss": (sum(anchor_losses) / len(anchor_losses) if anchor_losses else None),
+        "mean_policy_loss": (sum(policy_losses) / len(policy_losses) if policy_losses else None),
+        "mean_kl": sum(kl_values) / len(kl_values) if kl_values else None,
+        "canary": canary_report,
         "elapsed_seconds": time.perf_counter() - started,
         "output": str(final_dir),
     }
     if accelerator.is_main_process:
         write_json_atomic(output_dir / "stage_manifest.json", report)
+        if stage == "grpo":
+            write_jsonl(diagnostics_path, diagnostics)
     accelerator.wait_for_everyone()
     accelerator.free_memory()
     from deepspeed.comm import comm as deepspeed_comm
@@ -958,9 +1228,10 @@ def run_native_training_pipeline(config: NativePipelineConfig) -> dict[str, Any]
     encoder_dim = int(first["hidden"].shape[1])
     first.close()
     stages: dict[str, Any] = {}
-    input_dir: Path | None = None
+    stage_outputs: dict[str, Path] = {}
     for stage in NATIVE_STAGES:
         final_dir = config.output_dir / stage / "final"
+        input_dir = resolve_stage_input_dir(config, stage, stage_outputs)
         completed_report = _completed_stage_report(
             config.output_dir,
             stage,
@@ -968,10 +1239,10 @@ def run_native_training_pipeline(config: NativePipelineConfig) -> dict[str, Any]
         )
         if completed_report is not None:
             stages[stage] = completed_report
-            input_dir = final_dir
+            stage_outputs[stage] = final_dir
             continue
         stages[stage] = _run_stage(config, stage, records, encoder_dim, input_dir)
-        input_dir = final_dir
+        stage_outputs[stage] = final_dir
     report = {
         "schema_version": "lse.native_pipeline_run.v1",
         "status": "completed",

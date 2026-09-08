@@ -1,0 +1,26 @@
+{
+  "baseline": {
+    "mean_reward": 0.9721398305084745,
+    "placeholder_rate": 0.0,
+    "records": 1416,
+    "valid_json_rate": 1.0
+  },
+  "candidate": {
+    "mean_reward": 0.0,
+    "placeholder_rate": 0.0,
+    "records": 1416,
+    "valid_json_rate": 0.0
+  },
+  "created_at": "2026-09-03T07:32:00.403040+00:00",
+  "failed_checks": [
+    "valid_json_rate",
+    "mean_reward_regression"
+  ],
+  "schema_version": "lse.grpo_recovery_acceptance.v1",
+  "status": "failed",
+  "thresholds": {
+    "max_placeholder_rate": 0.0,
+    "max_reward_regression": 0.005,
+    "min_valid_json_rate": 0.99
+  }
+}

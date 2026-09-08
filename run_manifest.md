@@ -1,5 +1,27 @@
 # Run Manifest — LSE 2.0
 
+## 4.1 GRPO recovery（2026-09-09）
+
+状态：**RTX 3080 Ti 12GB 正式 300-step 训练、完整测试推理、DSP 泛化评测和晋升门禁均已通过。**
+
+| 项目 | 路径/状态 |
+| --- | --- |
+| 恢复起点 | `outputs/native_v4/sft/final`（不再使用退化 DPO） |
+| 短 canary 配置 | `configs/native_audio_autodl_grpo_recovery_canary.json` |
+| 正式配置 | `configs/native_audio_autodl_grpo_recovery_32gb.json` |
+| 一键入口 | `scripts/autodl_v4_1_grpo_recovery.sh` |
+| 本地测试 | 相关回归测试与 Ruff 均通过；最终交付再次全量执行 |
+| v4.0 负对照门禁 | 正确拒绝：SFT JSON=1.0/reward=0.97214；旧 GRPO JSON=0/reward=0 |
+| 12GB 短训 | 12 steps；JSON=0.989583；非饱和组=0.25；reward=0.970312 |
+| 训练前全量 canary | 48/48 有效 JSON；12/12 非饱和组 |
+| 12GB 正式训练 | 300 steps；1,200 groups；JSON=0.991458；非饱和组=0.998333 |
+| 测试推理 | 1,416/1,416 成功；mean 786.15ms；P95 873.03ms |
+| 晋升门禁 | passed；SFT reward 0.953821 → GRPO 0.976320；placeholder=0 |
+| DSP 泛化 | SI-SDR +0.35468dB；PESQ +0.04056；STOI +0.00260 |
+
+GPU 产物：`outputs/native_v4_1_grpo_canary_12gb/`、`outputs/native_v4_1_grpo_12gb/`。
+`grpo_acceptance.json.status == "passed"`，recovered GRPO 已满足晋升条件。
+
 状态：**AutoDL 全量 SFT、conservative DPO、300 步 GRPO 与同一 200 条留出集四阶段矩阵均已完成。**
 
 ## 固定环境

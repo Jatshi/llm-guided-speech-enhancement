@@ -61,8 +61,10 @@ def load_native_pipeline_config(path: str | Path) -> NativePipelineConfig:
                 deepspeed_path = (config_path.parent / deepspeed_path).resolve()
             if not deepspeed_path.is_file():
                 raise FileNotFoundError(deepspeed_path)
-    if stages["dpo"].get("input_stage") != "sft" or stages["grpo"].get("input_stage") != "dpo":
-        raise ValueError("native stage chain must be sft -> dpo -> grpo")
+    if stages["dpo"].get("input_stage") != "sft":
+        raise ValueError("dpo.input_stage must be sft")
+    if stages["grpo"].get("input_stage") not in {"sft", "dpo"}:
+        raise ValueError("grpo.input_stage must be sft or dpo")
     if int(stages["grpo"].get("num_generations", 0)) < 2:
         raise ValueError("GRPO requires at least two generations")
     if float(stages["dpo"].get("beta", 0.1)) <= 0:
@@ -73,6 +75,18 @@ def load_native_pipeline_config(path: str | Path) -> NativePipelineConfig:
         raise ValueError("grpo.beta must be non-negative")
     if not 0 < float(stages["grpo"].get("clip_epsilon", 0.2)) < 1:
         raise ValueError("grpo.clip_epsilon must be in (0, 1)")
+    if float(stages["grpo"].get("sft_anchor_weight", 0.05)) < 0:
+        raise ValueError("grpo.sft_anchor_weight must be non-negative")
+    if int(stages["grpo"].get("canary_groups", 8)) <= 0:
+        raise ValueError("grpo.canary_groups must be positive")
+    if int(stages["grpo"].get("max_consecutive_saturated_groups", 16)) <= 0:
+        raise ValueError("grpo.max_consecutive_saturated_groups must be positive")
+    for name, default in (
+        ("min_canary_valid_json_rate", 0.8),
+        ("min_canary_non_saturated_group_rate", 0.2),
+    ):
+        if not 0 <= float(stages["grpo"].get(name, default)) <= 1:
+            raise ValueError(f"grpo.{name} must be in [0, 1]")
     prefix_tokens = int(payload.get("prefix_tokens", 0))
     if prefix_tokens <= 0:
         raise ValueError("prefix_tokens must be positive")
