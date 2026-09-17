@@ -15,6 +15,7 @@ env/
 *.pt
 *.pth
 *.gguf
+*.joblib
 models/
 outputs/sft/
 outputs/dpo/
@@ -55,3 +56,11 @@ Thumbs.db
 # ---- V2 generated artifacts ----
 outputs/v2/
 outputs/smoke/
+
+# ---- Local delivery / experiment bundles ----
+artifacts/
+results/
+outputs/mmdit*/
+v4.0-archive/
+v4.1-grpo-recovery-prepared/
+v4.1_verified_grpo_20260909/

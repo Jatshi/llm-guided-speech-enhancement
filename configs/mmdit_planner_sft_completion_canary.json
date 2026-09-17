@@ -1,0 +1,50 @@
+{
+  "project": {"name": "lse-mmdit-planner-sft-completion-canary", "root": "..", "seed": 42},
+  "model": {
+    "name_or_path": "/root/autodl-tmp/models/Qwen2.5-1.5B-Instruct",
+    "dtype": "bfloat16",
+    "device_map": "auto",
+    "trust_remote_code": true,
+    "lora": {"r": 16, "alpha": 32, "dropout": 0.05, "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]}
+  },
+  "data": {
+    "audio_manifest": "data/mmdit/pairs.jsonl",
+    "sft_train": "data/mmdit/planner_sft/train.jsonl",
+    "sft_eval": "data/mmdit/planner_sft/eval.jsonl",
+    "dpo_train": "data/mmdit/planner_sft/train.jsonl",
+    "dpo_eval": "data/mmdit/planner_sft/eval.jsonl",
+    "grpo_train": "data/mmdit/planner_sft/train.jsonl",
+    "grpo_eval": "data/mmdit/planner_sft/eval.jsonl"
+  },
+  "training": {
+    "pipeline_status": "outputs/mmdit-planner-sft-completion-canary/pipeline_status.json",
+    "stage_inputs": {"dpo": "outputs/mmdit-planner-sft-completion-canary/final", "grpo": "outputs/mmdit-planner-sft-completion-canary/final"},
+    "stages": {
+      "sft": {
+        "output_dir": "outputs/mmdit-planner-sft-completion-canary",
+        "num_train_epochs": 1,
+        "max_steps": 5,
+        "per_device_train_batch_size": 8,
+        "per_device_eval_batch_size": 8,
+        "gradient_accumulation_steps": 2,
+        "learning_rate": 0.0001,
+        "max_length": 768,
+        "packing": false,
+        "completion_only_loss": true,
+        "response_template": "<|im_start|>assistant\n",
+        "warmup_ratio": 0.05,
+        "logging_steps": 1,
+        "eval_strategy": "no",
+        "save_strategy": "steps",
+        "save_steps": 5,
+        "save_total_limit": 1,
+        "gradient_checkpointing": false,
+        "dataloader_num_workers": 4,
+        "report_to": ["tensorboard"]
+      },
+      "dpo": {"per_device_train_batch_size": 1, "label_smoothing": 0.0},
+      "grpo": {"per_device_train_batch_size": 2, "num_generations": 2}
+    }
+  },
+  "evaluation": {"predictions": "data/mmdit/planner_predictions.sft-completion-canary.jsonl", "report": "results/mmdit-planner-sft-completion-canary/reward_report.json", "max_samples": 8, "max_new_tokens": 256}
+}

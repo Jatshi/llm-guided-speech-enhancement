@@ -1,0 +1,62 @@
+{
+  "schema_version": "lse.mmdit.config.v1",
+  "project": {"name": "lse-mmdit-smoke", "root": "..", "seed": 42},
+  "data": {
+    "manifest": "data/mmdit_smoke_v2/pairs.jsonl",
+    "sample_rate": 16000,
+    "segment_seconds": 0.25,
+    "check_files": true
+  },
+  "codec": {"n_fft": 128, "hop_length": 32, "win_length": 128, "normalized": true, "scale": 16.0},
+  "model": {
+    "in_channels": 2,
+    "model_dim": 32,
+    "depth": 2,
+    "heads": 4,
+    "mlp_ratio": 2.0,
+    "patch_frequency": 8,
+    "patch_time": 8,
+    "prescription_tokens": 8,
+    "prescription_vocab": 1024,
+    "field_vocab": 64,
+    "dropout": 0.0,
+    "gradient_checkpointing": false
+  },
+  "flow": {
+    "steps": 2,
+    "prescription_dropout": 0.1,
+    "x0_l1_weight": 0.1,
+    "guidance_scale": 1.0
+  },
+  "training": {
+    "output_dir": "outputs/mmdit-smoke-v2",
+    "batch_size": 2,
+    "eval_batch_size": 1,
+    "gradient_accumulation_steps": 2,
+    "max_steps": 2,
+    "learning_rate": 0.0002,
+    "weight_decay": 0.01,
+    "precision": "float32",
+    "num_workers": 0,
+    "log_every": 1,
+    "eval_every": 1,
+    "eval_batches": 1,
+    "save_every": 1,
+    "max_grad_norm": 1.0,
+    "max_parameters": 2000000,
+    "max_joint_tokens": 512
+  },
+  "evaluation": {
+    "output_dir": "results/mmdit-smoke-v2",
+    "max_samples": 2,
+    "sampling_steps": 2,
+    "guidance_scale": 1.0,
+    "gate": {
+      "min_planner_confidence": 0.35,
+      "max_peak": 1.0,
+      "min_energy_ratio": 0.05,
+      "max_energy_ratio": 20.0,
+      "max_change_rms_ratio": 10.0
+    }
+  }
+}

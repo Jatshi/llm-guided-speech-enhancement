@@ -1,0 +1,17 @@
+{
+  "diagnosis": {
+    "noise_type": "hum",
+    "reverb": false,
+    "band_limited": false
+  },
+  "actions": [
+    {
+      "type": "notch",
+      "reduction_db": 4.0,
+      "low_hz": 50,
+      "high_hz": 7600
+    }
+  ],
+  "rationale": "Example only; replace with a planner prediction for real inference.",
+  "confidence": 0.85
+}

@@ -1,0 +1,67 @@
+{
+  "schema_version": "lse.mmdit.config.v1",
+  "project": {"name": "lse-prescription-mmdit-32gb-residual-predicted", "root": "..", "seed": 42},
+  "data": {
+    "manifest": "data/mmdit/pairs.with_predictions.jsonl",
+    "sample_rate": 16000,
+    "segment_seconds": 2.0,
+    "check_files": true
+  },
+  "codec": {"n_fft": 512, "hop_length": 128, "win_length": 512, "normalized": true, "scale": 16.0},
+  "model": {
+    "in_channels": 2,
+    "model_dim": 384,
+    "depth": 8,
+    "heads": 8,
+    "mlp_ratio": 4.0,
+    "patch_frequency": 16,
+    "patch_time": 8,
+    "prescription_tokens": 8,
+    "prescription_vocab": 1024,
+    "field_vocab": 64,
+    "dropout": 0.0,
+    "gradient_checkpointing": false
+  },
+  "flow": {
+    "steps": 8,
+    "prescription_dropout": 0.15,
+    "x0_l1_weight": 0.1,
+    "guidance_scale": 1.0,
+    "source_mode": "observed",
+    "mismatch_noop_weight": 0.5
+  },
+  "training": {
+    "output_dir": "outputs/mmdit-32gb-residual",
+    "batch_size": 16,
+    "eval_batch_size": 1,
+    "gradient_accumulation_steps": 1,
+    "max_steps": 10000,
+    "warmup_steps": 500,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.01,
+    "betas": [0.9, 0.95],
+    "precision": "bfloat16",
+    "num_workers": 4,
+    "log_every": 10,
+    "eval_every": 250,
+    "eval_batches": 20,
+    "save_every": 250,
+    "max_grad_norm": 1.0,
+    "max_parameters": 80000000,
+    "max_joint_tokens": 1200
+  },
+  "evaluation": {
+    "output_dir": "results/mmdit-32gb-residual-predicted",
+    "max_samples": 200,
+    "sampling_steps": 8,
+    "guidance_scale": 1.0,
+    "deepfilternet": {"enabled": true, "model": "DeepFilterNet3"},
+    "gate": {
+      "min_planner_confidence": 0.35,
+      "max_peak": 0.999,
+      "min_energy_ratio": 0.2,
+      "max_energy_ratio": 5.0,
+      "max_change_rms_ratio": 3.0
+    }
+  }
+}
