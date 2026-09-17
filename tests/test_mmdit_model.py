@@ -1,12 +1,15 @@
 import pytest
 
 torch = pytest.importorskip("torch")
-from torch import nn
+from torch import nn  # noqa: E402
 
-from lse_v2.mmdit.codec import ComplexSTFTCodec, STFTCodecConfig
-from lse_v2.mmdit.flow import RectifiedFlow, RectifiedFlowConfig
-from lse_v2.mmdit.model import MMDiTConfig, PrescriptionConditionedMMDiT
-from lse_v2.mmdit.safety import EnhancementGate, EnhancementGateConfig
+from lse_v2.mmdit.codec import ComplexSTFTCodec, STFTCodecConfig  # noqa: E402
+from lse_v2.mmdit.flow import RectifiedFlow, RectifiedFlowConfig  # noqa: E402
+from lse_v2.mmdit.model import (  # noqa: E402
+    MMDiTConfig,
+    PrescriptionConditionedMMDiT,
+)
+from lse_v2.mmdit.safety import EnhancementGate, EnhancementGateConfig  # noqa: E402
 
 
 def _model() -> PrescriptionConditionedMMDiT:
