@@ -1,0 +1,14 @@
+{
+  "schema_version": "lse.mmdit.training_report.v1",
+  "status": "COMPLETED",
+  "steps": 10000,
+  "best_validation": 0.07356453280290225,
+  "elapsed_seconds": 1803.9701158311218,
+  "train_records": 1600,
+  "validation_records": 200,
+  "parameters": 51717122,
+  "device": "cuda",
+  "python": "3.10.8",
+  "torch": "2.1.2+cu118",
+  "config_digest": "cd63a2dc7effb1f60664e10ca0da0030faa51e8e04fdffd0b66c32fed3d2ff34"
+}

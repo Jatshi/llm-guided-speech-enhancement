@@ -215,7 +215,7 @@ def _train_sft(
     deepspeed_config: dict[str, Any] | None,
 ) -> None:
     from transformers import AutoTokenizer
-    from trl import SFTConfig, SFTTrainer
+    from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
 
     paths = config["data"]
     train_ds = _load_dataset(resolve_path(config, paths["sft_train"]), "lse.sft.v2")
@@ -246,6 +246,13 @@ def _train_sft(
         "tokenizer": tokenizer,
         "peft_config": _lora_config(config),
     }
+    if bool(params.get("completion_only_loss", False)):
+        response_template = str(params.get("response_template", "<|im_start|>assistant\n"))
+        response_token_ids = tokenizer.encode(response_template, add_special_tokens=False)
+        trainer_kwargs["data_collator"] = DataCollatorForCompletionOnlyLM(
+            response_template=response_token_ids,
+            tokenizer=tokenizer,
+        )
     trainer = SFTTrainer(**_filter_kwargs(SFTTrainer, trainer_kwargs))
     trainer.train(resume_from_checkpoint=str(resume) if resume else None)
     trainer.save_state()

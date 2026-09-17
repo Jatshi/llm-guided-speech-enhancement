@@ -1,0 +1,47 @@
+{
+  "artifacts": {
+    "adapter": "/root/autodl-tmp/llm-guided-speech-enhancement/outputs/mmdit-planner-sft/final",
+    "tensorboard": "/root/autodl-tmp/llm-guided-speech-enhancement/outputs/mmdit-planner-sft/tensorboard",
+    "trainer_state": "/root/autodl-tmp/llm-guided-speech-enhancement/outputs/mmdit-planner-sft/trainer_state.json"
+  },
+  "config": "/root/autodl-tmp/llm-guided-speech-enhancement/configs/mmdit_planner_sft_32gb.json",
+  "config_sha256": "f98616401da54e24b1f56ea402d305df5a77aa5a572f8ed059667ecc5b24e2fd",
+  "distributed": {
+    "deepspeed": null,
+    "launch_environment": null,
+    "world_size": 1
+  },
+  "dry_run": false,
+  "environment": {
+    "datasets": "3.2.0",
+    "peft": "0.14.0",
+    "python": "3.10.8",
+    "torch": "2.1.2+cu118",
+    "transformers": "4.48.3",
+    "trl": "0.16.1"
+  },
+  "finished_at": "2026-09-16T23:35:53.966513+00:00",
+  "git_commit": null,
+  "model": "/root/autodl-tmp/models/Qwen2.5-1.5B-Instruct",
+  "output_dir": "/root/autodl-tmp/llm-guided-speech-enhancement/outputs/mmdit-planner-sft",
+  "resume_from_checkpoint": null,
+  "schema_version": "lse.stage_run.v2",
+  "seed": 42,
+  "stage": "sft",
+  "started_at": "2026-09-16T23:30:52.611653+00:00",
+  "status": "complete",
+  "validation": {
+    "datasets": {
+      "eval": {
+        "path": "/root/autodl-tmp/llm-guided-speech-enhancement/data/mmdit/planner_sft/eval.jsonl",
+        "records": 200
+      },
+      "train": {
+        "path": "/root/autodl-tmp/llm-guided-speech-enhancement/data/mmdit/planner_sft/train.jsonl",
+        "records": 1600
+      }
+    },
+    "effective_batch_size": 16,
+    "stage": "sft"
+  }
+}

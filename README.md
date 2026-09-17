@@ -1,4 +1,70 @@
-# LLM-Guided Speech Enhancement 4.1 — Verified GRPO Recovery
+# LLM-Guided Speech Enhancement 5.0 — Prescription-MM-DiT
+
+[![Release](https://img.shields.io/badge/release-v5.0.0-7C3AED)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v5.0.0)
+[![CI](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml)
+[![Model](https://img.shields.io/badge/%F0%9F%A4%97-Prescription--MM--DiT-FF9D00)](https://huggingface.co/jatshi/LSE-Prescription-MM-DiT-v5)
+[![Evaluation](https://img.shields.io/badge/eval-200%20samples%20%7C%206%20arms-2563EB)](validation/v5_mmdit/evaluation_report.json)
+
+> **v5.0 已完成真实全链路，而不是 smoke test。** 本版本新增 51.7M 参数的处方条件
+> MM-DiT，以观测到的 noisy STFT 为流起点学习 residual rectified flow；同时加入
+> Qwen2.5-1.5B LoRA 规划器、ExtraTrees 声学路由、验证集置信度校准、动作能力门控与
+> 安全回退。正式训练 10,000 步，在 200 条说话人隔离测试样本上执行 6 个对照臂，
+> 共得到 1,200 行逐样本评测结果。
+
+## 5.0 verified result
+
+| Evidence | Result |
+|---|---:|
+| Public paired data | 2,000 LibriSpeech dev-clean pairs |
+| Speaker-disjoint split | 1,600 train / 200 validation / 200 test |
+| MM-DiT training | 10,000 steps, 51,717,122 parameters |
+| Planner JSON validity | 200 / 200 strict-valid |
+| Acoustic-router test accuracy | 79% (trained without test labels) |
+| Final SI-SDR / SNR improvement | **+0.114 dB / +0.132 dB** |
+| Final PESQ / STOI | 2.027 / 0.881 |
+| Safety fallback rate | 76.5% |
+
+The result supports a **selective, safety-gated enhancement** claim—not an all-condition SOTA
+claim. DeepFilterNet3 remains stronger on the non-clean subset (+0.374 dB SI-SDRi versus +0.142
+dB). v5.0's useful behavior is to abstain on low-confidence or unsupported conditions instead of
+blindly over-processing clean, reverberant, or telephone-band audio.
+
+```mermaid
+flowchart LR
+    A[Noisy waveform] --> B[Measured acoustic features]
+    B --> C[ExtraTrees diagnosis]
+    B --> D[Qwen LoRA prescription]
+    C --> E[Hybrid evidence gate]
+    D --> E
+    E -->|supported + confident| F[Observed-source MM-DiT]
+    E -->|unsupported / uncertain| G[Return original waveform]
+    F --> H[Post-enhancement safety gate]
+    H --> I[Enhanced or rolled-back output]
+```
+
+- Model package: [Hugging Face `jatshi/LSE-Prescription-MM-DiT-v5`](https://huggingface.co/jatshi/LSE-Prescription-MM-DiT-v5)
+- Full execution report: [`docs/MMDIT_AUTODL_EXECUTION_REPORT_2026-09-17.md`](docs/MMDIT_AUTODL_EXECUTION_REPORT_2026-09-17.md)
+- Architecture and contracts: [`docs/PRESCRIPTION_MMDIT_DESIGN.md`](docs/PRESCRIPTION_MMDIT_DESIGN.md)
+- Reproduction runbook: [`docs/MMDIT_AUTODL_RUNBOOK.md`](docs/MMDIT_AUTODL_RUNBOOK.md)
+- Machine-readable evidence: [`validation/v5_mmdit/`](validation/v5_mmdit/)
+
+Quick inference with a trusted v5 checkpoint:
+
+```bash
+python -m lse_v2.mmdit.infer \
+  --checkpoint outputs/mmdit-32gb-residual/checkpoint-best.pt \
+  --input noisy.wav \
+  --prescription examples/mmdit_prescription.json \
+  --output enhanced.wav
+```
+
+The checkpoint, Qwen LoRA adapter, and safe acoustic router are hosted on Hugging Face; generated
+audio, reconstructed datasets, and large training outputs remain outside Git. See
+[`MODEL_CARD_V5_MMDIT.md`](MODEL_CARD_V5_MMDIT.md) for component boundaries and loading guidance.
+
+---
+
+## 4.1 — Verified GRPO Recovery
 
 > **4.1 已在 RTX 3080 Ti 12GB 上完成 300-step 真实 GRPO、1,416 条完整测试集推理、
 > DSP 泛化评测和 SFT 对照晋升门禁。** 修复版从已验证的 SFT adapter 启动，加入

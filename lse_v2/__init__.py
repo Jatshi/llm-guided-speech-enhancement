@@ -1,3 +1,3 @@
-"""LLM-Guided Speech Enhancement 3.0."""
+"""LLM-Guided Speech Enhancement 5.0."""
 
-__version__ = "3.0.0"
+__version__ = "5.0.0"
