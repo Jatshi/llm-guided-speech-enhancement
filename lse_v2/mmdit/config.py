@@ -41,6 +41,25 @@ def validate_mmdit_config(config: dict[str, Any]) -> None:
             raise MMDiTConfigError(f"training.{key} must be >= 1")
     if float(training.get("learning_rate", 0)) <= 0:
         raise MMDiTConfigError("training.learning_rate must be positive")
+    curriculum = training.get("curriculum")
+    if curriculum is not None:
+        if not isinstance(curriculum, list) or not curriculum:
+            raise MMDiTConfigError("training.curriculum must be a non-empty list")
+        previous = 0
+        for index, phase in enumerate(curriculum):
+            if not isinstance(phase, dict):
+                raise MMDiTConfigError(f"training.curriculum[{index}] must be an object")
+            until = int(phase.get("until_step", 0))
+            if until <= previous:
+                raise MMDiTConfigError("curriculum until_step values must increase")
+            if not str(phase.get("name", "")).strip():
+                raise MMDiTConfigError(f"training.curriculum[{index}].name is required")
+            previous = until
+        if previous < int(training["max_steps"]):
+            raise MMDiTConfigError("training.curriculum must cover max_steps")
+    semantic = training.get("auxiliary_losses", {}).get("semantic", {})
+    if semantic and int(semantic.get("every_steps", 1)) < 1:
+        raise MMDiTConfigError("semantic.every_steps must be positive")
 
 
 def project_root(config: dict[str, Any]) -> Path:

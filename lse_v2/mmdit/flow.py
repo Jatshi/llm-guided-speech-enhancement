@@ -24,6 +24,7 @@ class FlowLoss:
     velocity_mse: torch.Tensor
     x0_l1: torch.Tensor
     mismatch_noop_mse: torch.Tensor
+    estimated_x0: torch.Tensor
 
 
 class RectifiedFlow:
@@ -110,6 +111,7 @@ class RectifiedFlow:
             velocity_mse=velocity_mse,
             x0_l1=x0_l1,
             mismatch_noop_mse=mismatch_noop_mse,
+            estimated_x0=estimated_x0,
         )
 
     def sample(

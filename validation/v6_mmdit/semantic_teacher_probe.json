@@ -1,0 +1,11 @@
+{
+  "schema_version": "lse.mmdit.semantic_teacher_probe.v1",
+  "status": "PASSED",
+  "model": "microsoft/wavlm-base-plus",
+  "device": "cuda",
+  "seconds": 1.0,
+  "loss": 0.08784046024084091,
+  "input_gradient_l2": 2.889805793762207,
+  "trainable_teacher_parameters": 0,
+  "cuda_peak_memory_bytes": 483798016
+}

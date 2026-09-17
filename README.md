@@ -1,15 +1,35 @@
-# LLM-Guided Speech Enhancement 5.0 — Prescription-MM-DiT
+# LLM-Guided Speech Enhancement 6.0 — StepAudio3-informed Prescription-MM-DiT
 
-[![Release](https://img.shields.io/badge/release-v5.0.0-7C3AED)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v5.0.0)
+[![Release](https://img.shields.io/badge/release-v6.0.0-0891B2)](https://github.com/Jatshi/llm-guided-speech-enhancement/releases/tag/v6.0.0)
 [![CI](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml/badge.svg)](https://github.com/Jatshi/llm-guided-speech-enhancement/actions/workflows/ci.yml)
-[![Model](https://img.shields.io/badge/%F0%9F%A4%97-Prescription--MM--DiT-FF9D00)](https://huggingface.co/jatshi/LSE-Prescription-MM-DiT-v5)
-[![Evaluation](https://img.shields.io/badge/eval-200%20samples%20%7C%206%20arms-2563EB)](validation/v5_mmdit/evaluation_report.json)
+[![Model](https://img.shields.io/badge/%F0%9F%A4%97-MM--DiT--v6-FF9D00)](https://huggingface.co/jatshi/LSE-Prescription-MM-DiT-v6-StepAudio3)
+[![Evaluation](https://img.shields.io/badge/eval-200%20samples%20%7C%206%20arms-2563EB)](validation/v6_mmdit/evaluation_report.json)
 
-> **v5.0 已完成真实全链路，而不是 smoke test。** 本版本新增 51.7M 参数的处方条件
-> MM-DiT，以观测到的 noisy STFT 为流起点学习 residual rectified flow；同时加入
-> Qwen2.5-1.5B LoRA 规划器、ExtraTrees 声学路由、验证集置信度校准、动作能力门控与
-> 安全回退。正式训练 10,000 步，在 200 条说话人隔离测试样本上执行 6 个对照臂，
-> 共得到 1,200 行逐样本评测结果。
+> **v6.0 已完成 12,000-step CUDA 训练和六臂实测。** 在 160 条真实退化样本上，
+> oracle / predicted 处方相对无处方分别获得 +0.258 / +0.216 dB 配对 SI-SDR 增益，
+> 20,000 次 bootstrap 的 95% CI 均大于 0；shuffled 处方更差，证明网络真实利用了结构化
+> 条件。PESQ/STOI 仍未超过 DeepFilterNet3，因此这是可审计的 research release，不是
+> SOTA 宣称。
+
+## 6.0 verified research release
+
+Version 6.0 adds zero-velocity initialization, a three-stage
+curriculum, multi-resolution STFT loss, frozen-WavLM semantic consistency, temporal
+`EnhanceScript`, and outcome-grounded planning utilities. It completed a 12,000-step CUDA run
+and a six-arm evaluation on the same 200-example speaker-disjoint test set.
+
+The clean identity slice has near-infinite input SI-SDR and is reported separately. On the 160
+genuinely corrupted examples, oracle and predicted prescriptions beat no prescription by
+**+0.258 dB** (95% paired-bootstrap CI +0.089 to +0.424) and **+0.216 dB** (+0.142 to +0.294),
+while shuffled prescriptions are worse. This supports causal use of the structured condition,
+but absolute gains are small and PESQ/STOI remain below DeepFilterNet3. v6 is therefore a measured
+research release, not an SOTA claim.
+
+- Full v6 execution report: [`docs/MMDIT_V6_AUTODL_EXECUTION_REPORT_20260917.md`](docs/MMDIT_V6_AUTODL_EXECUTION_REPORT_20260917.md)
+- Design and evidence boundaries: [`docs/MMDIT_V6_STEPAUDIO3_DESIGN_ZH.md`](docs/MMDIT_V6_STEPAUDIO3_DESIGN_ZH.md)
+- AutoDL reproduction: [`docs/MMDIT_V6_AUTODL_RUNBOOK_ZH.md`](docs/MMDIT_V6_AUTODL_RUNBOOK_ZH.md)
+- Complete Chinese learning manual: [`docs/Prescription_MM-DiT_v6_StepAudio3_完整学习手册.html`](docs/Prescription_MM-DiT_v6_StepAudio3_完整学习手册.html)
+- Model package: [Hugging Face `jatshi/LSE-Prescription-MM-DiT-v6-StepAudio3`](https://huggingface.co/jatshi/LSE-Prescription-MM-DiT-v6-StepAudio3)
 
 ## 5.0 verified result
 

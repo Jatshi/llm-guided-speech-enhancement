@@ -1,0 +1,113 @@
+{
+  "schema_version": "lse.mmdit.config.v1",
+  "project": {
+    "name": "lse-mmdit-v6-stepaudio3-smoke",
+    "root": "..",
+    "seed": 42
+  },
+  "data": {
+    "manifest": "data/mmdit_smoke_v6/pairs.enhance_script.jsonl",
+    "sample_rate": 16000,
+    "segment_seconds": 0.25,
+    "check_files": true
+  },
+  "codec": {
+    "n_fft": 128,
+    "hop_length": 32,
+    "win_length": 128,
+    "normalized": true,
+    "scale": 16.0
+  },
+  "model": {
+    "in_channels": 2,
+    "model_dim": 32,
+    "depth": 2,
+    "heads": 4,
+    "mlp_ratio": 2.0,
+    "patch_frequency": 8,
+    "patch_time": 8,
+    "prescription_tokens": 16,
+    "prescription_vocab": 1024,
+    "field_vocab": 64,
+    "dropout": 0.0,
+    "gradient_checkpointing": false,
+    "identity_init": true
+  },
+  "flow": {
+    "steps": 2,
+    "prescription_dropout": 0.1,
+    "x0_l1_weight": 0.1,
+    "guidance_scale": 1.0,
+    "source_mode": "observed",
+    "mismatch_noop_weight": 0.1
+  },
+  "training": {
+    "output_dir": "outputs/mmdit-v6-smoke",
+    "batch_size": 2,
+    "eval_batch_size": 1,
+    "gradient_accumulation_steps": 1,
+    "max_steps": 2,
+    "warmup_steps": 1,
+    "learning_rate": 0.0002,
+    "weight_decay": 0.01,
+    "precision": "float32",
+    "num_workers": 0,
+    "log_every": 1,
+    "eval_every": 1,
+    "eval_batches": 1,
+    "save_every": 1,
+    "max_grad_norm": 1.0,
+    "max_parameters": 2000000,
+    "max_joint_tokens": 512,
+    "auxiliary_losses": {
+      "multi_resolution_stft": {
+        "fft_sizes": [64, 128],
+        "hop_sizes": [16, 32]
+      },
+      "semantic": {
+        "every_steps": 1
+      }
+    },
+    "curriculum": [
+      {
+        "name": "identity_bootstrap",
+        "until_step": 1,
+        "flow": {
+          "prescription_dropout": 0.0,
+          "mismatch_noop_weight": 0.0
+        },
+        "loss_weights": {
+          "mrstft": 0.05,
+          "semantic": 0.0
+        },
+        "lr_scale": 1.0
+      },
+      {
+        "name": "condition_wiring",
+        "until_step": 2,
+        "flow": {
+          "prescription_dropout": 0.1,
+          "mismatch_noop_weight": 0.1
+        },
+        "loss_weights": {
+          "mrstft": 0.05,
+          "semantic": 0.0
+        },
+        "lr_scale": 0.5
+      }
+    ]
+  },
+  "evaluation": {
+    "output_dir": "results/mmdit-v6-smoke",
+    "max_samples": 2,
+    "sampling_steps": 2,
+    "guidance_scale": 1.0,
+    "gate": {
+      "min_planner_confidence": 0.35,
+      "max_peak": 1.0,
+      "min_energy_ratio": 0.05,
+      "max_energy_ratio": 20.0,
+      "max_change_rms_ratio": 10.0
+    }
+  }
+}

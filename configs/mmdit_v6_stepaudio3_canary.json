@@ -1,0 +1,103 @@
+{
+  "schema_version": "lse.mmdit.config.v1",
+  "project": {
+    "name": "lse-prescription-mmdit-v6-stepaudio3-canary",
+    "root": "..",
+    "seed": 42
+  },
+  "data": {
+    "manifest": "data/mmdit/pairs.hybrid_safe_predictions.enhance_script.jsonl",
+    "sample_rate": 16000,
+    "segment_seconds": 2.0,
+    "check_files": true
+  },
+  "codec": {
+    "n_fft": 512,
+    "hop_length": 128,
+    "win_length": 512,
+    "normalized": true,
+    "scale": 16.0
+  },
+  "model": {
+    "in_channels": 2,
+    "model_dim": 384,
+    "depth": 8,
+    "heads": 8,
+    "mlp_ratio": 4.0,
+    "patch_frequency": 16,
+    "patch_time": 8,
+    "prescription_tokens": 16,
+    "prescription_vocab": 1024,
+    "field_vocab": 64,
+    "dropout": 0.0,
+    "gradient_checkpointing": false,
+    "identity_init": true
+  },
+  "flow": {
+    "steps": 4,
+    "prescription_dropout": 0.1,
+    "x0_l1_weight": 0.1,
+    "guidance_scale": 1.0,
+    "source_mode": "observed",
+    "mismatch_noop_weight": 0.25
+  },
+  "training": {
+    "output_dir": "outputs/mmdit-v6-canary",
+    "batch_size": 12,
+    "eval_batch_size": 1,
+    "gradient_accumulation_steps": 1,
+    "max_steps": 20,
+    "warmup_steps": 2,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.01,
+    "betas": [0.9, 0.95],
+    "precision": "bfloat16",
+    "num_workers": 2,
+    "log_every": 1,
+    "eval_every": 5,
+    "eval_batches": 2,
+    "save_every": 5,
+    "max_grad_norm": 1.0,
+    "max_parameters": 80000000,
+    "max_joint_tokens": 1200,
+    "auxiliary_losses": {
+      "multi_resolution_stft": {
+        "fft_sizes": [256, 512, 1024],
+        "hop_sizes": [64, 128, 256]
+      },
+      "semantic": {
+        "model_name": "microsoft/wavlm-base-plus",
+        "layer": 9,
+        "every_steps": 2
+      }
+    },
+    "curriculum": [
+      {
+        "name": "full_objective_canary",
+        "until_step": 20,
+        "flow": {
+          "prescription_dropout": 0.1,
+          "mismatch_noop_weight": 0.25
+        },
+        "loss_weights": {
+          "mrstft": 0.05,
+          "semantic": 0.02
+        },
+        "lr_scale": 1.0
+      }
+    ]
+  },
+  "evaluation": {
+    "output_dir": "results/mmdit-v6-canary",
+    "max_samples": 4,
+    "sampling_steps": 4,
+    "guidance_scale": 1.0,
+    "gate": {
+      "min_planner_confidence": 0.7,
+      "max_peak": 0.999,
+      "min_energy_ratio": 0.2,
+      "max_energy_ratio": 5.0,
+      "max_change_rms_ratio": 3.0
+    }
+  }
+}

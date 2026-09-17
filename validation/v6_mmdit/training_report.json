@@ -1,0 +1,54 @@
+{
+  "schema_version": "lse.mmdit.training_report.v1",
+  "status": "COMPLETED",
+  "steps": 12000,
+  "best_validation": 0.23217403445014498,
+  "best_phase": "joint_cooldown",
+  "elapsed_seconds": 1502.4740965943784,
+  "train_records": 1600,
+  "validation_records": 200,
+  "parameters": 51717122,
+  "curriculum": [
+    {
+      "name": "oracle_alignment",
+      "start_step": 1,
+      "until_step": 4000,
+      "flow_overrides": {
+        "prescription_dropout": 0.0,
+        "mismatch_noop_weight": 0.0
+      },
+      "mrstft_weight": 0.05,
+      "semantic_weight": 0.0,
+      "lr_scale": 1.0
+    },
+    {
+      "name": "safety_alignment",
+      "start_step": 4001,
+      "until_step": 9000,
+      "flow_overrides": {
+        "prescription_dropout": 0.15,
+        "mismatch_noop_weight": 0.5
+      },
+      "mrstft_weight": 0.1,
+      "semantic_weight": 0.03,
+      "lr_scale": 1.0
+    },
+    {
+      "name": "joint_cooldown",
+      "start_step": 9001,
+      "until_step": 12000,
+      "flow_overrides": {
+        "prescription_dropout": 0.15,
+        "mismatch_noop_weight": 0.5
+      },
+      "mrstft_weight": 0.1,
+      "semantic_weight": 0.05,
+      "lr_scale": 0.25
+    }
+  ],
+  "semantic_teacher": "microsoft/wavlm-base-plus",
+  "device": "cuda",
+  "python": "3.10.8",
+  "torch": "2.1.2+cu118",
+  "config_digest": "c7cd74c34e0936df1ba4221e984aeb6f61b5e33986f42f2ff4237572da67e5d2"
+}

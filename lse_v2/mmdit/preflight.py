@@ -20,6 +20,7 @@ from lse_v2.io import read_jsonl
 from .codec import ComplexSTFTCodec, STFTCodecConfig
 from .config import config_digest, load_mmdit_config, resolve_path
 from .contracts import validate_pair_record
+from .curriculum import CurriculumSchedule
 from .data import PairedEnhancementDataset, batch_to_device, collate_pairs
 from .model import MMDiTConfig, PrescriptionConditionedMMDiT
 
@@ -50,6 +51,10 @@ def preflight(config_path: Path, output: Path, *, runtime_smoke: bool = False) -
     split_counts = Counter(str(row.get("split")) for row in rows)
     model_config = MMDiTConfig(**config["model"])
     model = PrescriptionConditionedMMDiT(model_config)
+    curriculum = CurriculumSchedule.from_config(
+        config["training"].get("curriculum"),
+        max_steps=int(config["training"]["max_steps"]),
+    )
     parameters = sum(parameter.numel() for parameter in model.parameters())
     sample_rate = int(config["data"]["sample_rate"])
     samples = round(sample_rate * float(config["data"]["segment_seconds"]))
@@ -70,6 +75,19 @@ def preflight(config_path: Path, output: Path, *, runtime_smoke: bool = False) -
         "speaker_disjoint": not leakage,
         "parameter_budget": parameters <= int(config["training"].get("max_parameters", 80_000_000)),
         "joint_token_budget": joint_tokens <= int(config["training"].get("max_joint_tokens", 1536)),
+        "identity_initialization": (
+            not model_config.identity_init
+            or (
+                bool(torch.count_nonzero(model.output.weight) == 0)
+                and all(
+                    bool(torch.count_nonzero(block.modulation[-1].weight) == 0)
+                    for block in model.blocks
+                )
+            )
+        ),
+        "curriculum_covers_training": (
+            curriculum.phases[-1].until_step >= int(config["training"]["max_steps"])
+        ),
     }
     if config["evaluation"].get("deepfilternet", {}).get("enabled", False):
         gates["strong_baseline_package"] = importlib.util.find_spec("df") is not None
@@ -159,6 +177,17 @@ def preflight(config_path: Path, output: Path, *, runtime_smoke: bool = False) -
         "parameters": parameters,
         "audio_tokens_per_stream": audio_tokens,
         "joint_attention_tokens": joint_tokens,
+        "curriculum": [
+            {
+                "name": phase.name,
+                "start_step": phase.start_step,
+                "until_step": phase.until_step,
+                "mrstft_weight": phase.mrstft_weight,
+                "semantic_weight": phase.semantic_weight,
+                "lr_scale": phase.lr_scale,
+            }
+            for phase in curriculum.phases
+        ],
         "gates": gates,
         "runtime_smoke": runtime,
         "environment": {
