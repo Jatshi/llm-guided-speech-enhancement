@@ -104,9 +104,7 @@ def _summaries(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _degradation_summaries(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Keep the clean safety slice separate from the enhancement task slices."""
 
-    degradation_types = sorted(
-        {str(row.get("degradation_type", "unknown")) for row in rows}
-    )
+    degradation_types = sorted({str(row.get("degradation_type", "unknown")) for row in rows})
     grouped = {
         degradation: _summaries(
             [row for row in rows if str(row.get("degradation_type", "unknown")) == degradation]

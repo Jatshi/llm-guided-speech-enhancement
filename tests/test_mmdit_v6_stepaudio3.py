@@ -330,13 +330,13 @@ def test_evaluation_summaries_keep_clean_safety_slice_separate() -> None:
 def test_resume_truncates_and_deduplicates_metrics_log(tmp_path: Path) -> None:
     path = tmp_path / "train_metrics.jsonl"
     path.write_text(
-        '\n'.join(
+        "\n".join(
             [
                 '{"step": 1, "loss": 1.0}',
                 '{"step": 2, "loss": 0.9}',
                 '{"step": 2, "loss": 0.8}',
                 '{"step": 3, "loss": 0.7}',
-                'partial-json',
+                "partial-json",
             ]
         ),
         encoding="utf-8",
