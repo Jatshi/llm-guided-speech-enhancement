@@ -1,0 +1,97 @@
+{
+  "schema_version": "lse.mmdit.preflight.v1",
+  "status": "READY",
+  "measurement_status": "NOT_MEASURED",
+  "config": "/root/autodl-tmp/llm-guided-speech-enhancement/configs/mmdit_v6_stepaudio3_32gb.json",
+  "config_digest": "c7cd74c34e0936df1ba4221e984aeb6f61b5e33986f42f2ff4237572da67e5d2",
+  "manifest": "/root/autodl-tmp/llm-guided-speech-enhancement/data/mmdit/pairs.hybrid_safe_predictions.enhance_script.jsonl",
+  "records": 2000,
+  "split_counts": {
+    "train": 1600,
+    "validation": 200,
+    "test": 200
+  },
+  "speakers": 33,
+  "speaker_leakage": {},
+  "predicted_prescriptions": 200,
+  "contract_errors": [],
+  "parameters": 51717122,
+  "audio_tokens_per_stream": 544,
+  "joint_attention_tokens": 1104,
+  "curriculum": [
+    {
+      "name": "oracle_alignment",
+      "start_step": 1,
+      "until_step": 4000,
+      "mrstft_weight": 0.05,
+      "semantic_weight": 0.0,
+      "lr_scale": 1.0
+    },
+    {
+      "name": "safety_alignment",
+      "start_step": 4001,
+      "until_step": 9000,
+      "mrstft_weight": 0.1,
+      "semantic_weight": 0.03,
+      "lr_scale": 1.0
+    },
+    {
+      "name": "joint_cooldown",
+      "start_step": 9001,
+      "until_step": 12000,
+      "mrstft_weight": 0.1,
+      "semantic_weight": 0.05,
+      "lr_scale": 0.25
+    }
+  ],
+  "gates": {
+    "manifest_records_present": true,
+    "pair_contracts_valid": true,
+    "train_split_present": true,
+    "validation_split_present": true,
+    "test_split_present": true,
+    "speaker_disjoint": true,
+    "parameter_budget": true,
+    "joint_token_budget": true,
+    "identity_initialization": true,
+    "curriculum_covers_training": true,
+    "strong_baseline_package": true,
+    "runtime_forward": true,
+    "latent_scale_sane": true
+  },
+  "runtime_smoke": {
+    "requested": true,
+    "status": "PASSED",
+    "device": "cuda",
+    "input_shape": [
+      1,
+      2,
+      257,
+      251
+    ],
+    "output_shape": [
+      1,
+      2,
+      257,
+      251
+    ],
+    "finite": true,
+    "clean_latent_mean": -0.00013537598715629429,
+    "clean_latent_std": 0.7021696269512177,
+    "clean_latent_std_min": 0.23336265981197357,
+    "clean_latent_std_max": 1.1513912677764893,
+    "latent_probe_batches": 16,
+    "clean_latent_abs_max": 37.03752136230469,
+    "gpu_peak_memory_bytes": 350851584
+  },
+  "environment": {
+    "python": "3.10.8",
+    "torch": "2.1.2+cu118",
+    "cuda_available": true,
+    "cuda": "11.8",
+    "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+    "git_commit": null,
+    "git_dirty": false
+  },
+  "claim_boundary": "Preflight verifies wiring only. Enhancement quality remains NOT_MEASURED until the held-out five-arm evaluation completes."
+}

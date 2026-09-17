@@ -25,6 +25,7 @@ class MMDiTConfig:
     field_vocab: int = 64
     dropout: float = 0.0
     gradient_checkpointing: bool = False
+    identity_init: bool = False
 
     def validate(self) -> None:
         if self.model_dim % self.heads:
@@ -171,6 +172,25 @@ class PrescriptionConditionedMMDiT(nn.Module):
         self.blocks = nn.ModuleList(JointAttentionBlock(config) for _ in range(config.depth))
         self.output_norm = nn.LayerNorm(config.model_dim)
         self.output = nn.ConvTranspose2d(config.model_dim, config.in_channels, patch, stride=patch)
+        if config.identity_init:
+            self._initialize_as_noop()
+
+    def _initialize_as_noop(self) -> None:
+        """Start an observed-source flow model at the exact no-op solution.
+
+        A zero velocity field leaves the observed latent unchanged.  Zeroing both
+        the target-stream AdaLN gates and the velocity head prevents a newly
+        introduced condition path from damaging clean inputs before it has learned
+        a useful residual, following the same identity-preserving principle as a
+        zero-initialized modality adaptor.
+        """
+
+        for block in self.blocks:
+            nn.init.zeros_(block.modulation[-1].weight)
+            nn.init.zeros_(block.modulation[-1].bias)
+        nn.init.zeros_(self.output.weight)
+        if self.output.bias is not None:
+            nn.init.zeros_(self.output.bias)
 
     def export_config(self) -> dict:
         return asdict(self.config)

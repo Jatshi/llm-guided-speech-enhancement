@@ -93,11 +93,30 @@ def _summaries(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         ):
             values = [float(item[metric]) for item in items if item.get(metric) not in {None, ""}]
             summary[f"{metric}_mean"] = statistics.fmean(values) if values else ""
+            summary[f"{metric}_median"] = statistics.median(values) if values else ""
         summary["fallback_rate"] = statistics.fmean(
             float(bool(item.get("used_fallback"))) for item in items
         )
         result.append(summary)
     return result
+
+
+def _degradation_summaries(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Keep the clean safety slice separate from the enhancement task slices."""
+
+    degradation_types = sorted(
+        {str(row.get("degradation_type", "unknown")) for row in rows}
+    )
+    grouped = {
+        degradation: _summaries(
+            [row for row in rows if str(row.get("degradation_type", "unknown")) == degradation]
+        )
+        for degradation in degradation_types
+    }
+    grouped["corrupted_only"] = _summaries(
+        [row for row in rows if str(row.get("degradation_type", "unknown")) != "clean"]
+    )
+    return grouped
 
 
 @torch.inference_mode()
@@ -138,6 +157,7 @@ def evaluate(config_path: Path, checkpoint_path: Path) -> dict[str, Any]:
         batch = batch_to_device(raw, device)
         noisy, clean = batch["noisy"], batch["clean"]
         record = raw["record"][0]
+        degradation = record.get("provenance", {}).get("degradation", {})
         observed = codec.encode(noisy.float())
         input_si_sdr = si_sdr(noisy, clean)
         input_snr = snr(noisy, clean)
@@ -194,6 +214,12 @@ def evaluate(config_path: Path, checkpoint_path: Path) -> dict[str, Any]:
                 {
                     "sample_id": record["sample_id"],
                     "variant": variant,
+                    "degradation_type": degradation.get("noise_type", "unknown"),
+                    "degradation_snr_db": degradation.get("snr_db", ""),
+                    "degradation_reverb_rt60": degradation.get("reverb_rt60", ""),
+                    "degradation_bandlimit_hz": degradation.get("bandlimit_hz", ""),
+                    "input_si_sdr": finite_or_none(input_si_sdr),
+                    "input_snr": finite_or_none(input_snr),
                     "si_sdr": finite_or_none(candidate_si_sdr),
                     "si_sdr_improvement": finite_or_none(candidate_si_sdr - input_si_sdr),
                     "snr": finite_or_none(candidate_snr),
@@ -240,6 +266,11 @@ def evaluate(config_path: Path, checkpoint_path: Path) -> dict[str, Any]:
             "lsd": "complex-STFT log-spectral distance",
         },
         "summary": summaries,
+        "summary_by_degradation": _degradation_summaries(rows),
+        "interpretation_note": (
+            "Use corrupted_only and per-degradation summaries for enhancement quality; "
+            "clean identity pairs are a safety slice and can dominate mean SI-SDR improvement."
+        ),
     }
     (output / "evaluation_report.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"

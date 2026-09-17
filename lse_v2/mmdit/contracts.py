@@ -7,6 +7,7 @@ import math
 from typing import Any
 
 MMDIT_PAIR_SCHEMA = "lse.mmdit_pair.v1"
+ENHANCE_SCRIPT_SCHEMA = "lse.enhance_script.v1"
 VALID_SPLITS = {"train", "validation", "test"}
 
 
@@ -41,6 +42,57 @@ def validate_prescription(value: Any, context: str = "prescription") -> None:
     confidence = value.get("confidence", 0.0)
     if not isinstance(confidence, int | float) or not 0 <= float(confidence) <= 1:
         raise PairContractError(f"{context}.confidence must be in [0, 1]")
+    script = value.get("enhance_script")
+    if script is not None:
+        validate_enhance_script(script, f"{context}.enhance_script")
+
+
+def validate_enhance_script(value: Any, context: str = "enhance_script") -> None:
+    """Validate a readable, time-local enhancement plan before tokenization."""
+
+    if not isinstance(value, dict):
+        raise PairContractError(f"{context} must be an object")
+    if value.get("schema_version") != ENHANCE_SCRIPT_SCHEMA:
+        raise PairContractError(f"{context}.schema_version must be {ENHANCE_SCRIPT_SCHEMA}")
+    duration = value.get("duration_ms")
+    if not isinstance(duration, int | float) or not math.isfinite(float(duration)) or duration <= 0:
+        raise PairContractError(f"{context}.duration_ms must be positive and finite")
+    preserve = value.get("preserve")
+    if not isinstance(preserve, dict):
+        raise PairContractError(f"{context}.preserve must be an object")
+    for key in ("speech_content", "speaker_identity", "prosody"):
+        if not isinstance(preserve.get(key), bool):
+            raise PairContractError(f"{context}.preserve.{key} must be boolean")
+    segments = value.get("segments")
+    if not isinstance(segments, list) or not segments:
+        raise PairContractError(f"{context}.segments must be a non-empty list")
+    previous_end = 0.0
+    for index, segment in enumerate(segments):
+        prefix = f"{context}.segments[{index}]"
+        if not isinstance(segment, dict):
+            raise PairContractError(f"{prefix} must be an object")
+        start = segment.get("start_ms")
+        end = segment.get("end_ms")
+        if not all(
+            isinstance(item, int | float) and math.isfinite(float(item)) for item in (start, end)
+        ):
+            raise PairContractError(f"{prefix} boundaries must be finite numbers")
+        start_value, end_value = float(start), float(end)
+        if start_value < previous_end:
+            raise PairContractError(f"{prefix} overlaps the previous segment")
+        if start_value < 0 or end_value <= start_value or end_value > float(duration):
+            raise PairContractError(
+                f"{prefix} boundaries must satisfy 0 <= start < end <= duration"
+            )
+        _non_empty_string(segment.get("diagnosis"), f"{prefix}.diagnosis")
+        _non_empty_string(segment.get("action"), f"{prefix}.action")
+        strength = segment.get("strength")
+        confidence = segment.get("confidence", 0.0)
+        if not isinstance(strength, int | float) or not 0 <= float(strength) <= 1:
+            raise PairContractError(f"{prefix}.strength must be in [0, 1]")
+        if not isinstance(confidence, int | float) or not 0 <= float(confidence) <= 1:
+            raise PairContractError(f"{prefix}.confidence must be in [0, 1]")
+        previous_end = end_value
 
 
 def validate_pair_record(record: dict[str, Any], *, check_files: bool = False) -> None:
@@ -124,6 +176,46 @@ def prescription_tokens(
             (10 + index, _category(action.get("type")), max(-1.0, min(1.0, numeric / 40)))
         )
         if len(result) == max_tokens:
+            break
+    script = prescription.get("enhance_script")
+    if script is not None and len(result) < max_tokens:
+        scripted = enhance_script_tokens(script, max_tokens=max_tokens)
+        result.extend(token for token in scripted if token[0] != 0)
+    result.extend([(0, 0, 0.0)] * (max_tokens - len(result)))
+    return result[:max_tokens]
+
+
+def enhance_script_tokens(
+    script: dict[str, Any], *, max_tokens: int = 16
+) -> list[tuple[int, int, float]]:
+    """Encode global preservation constraints and local timeline decisions.
+
+    Each segment receives three tokens: normalized start, normalized end, and
+    executable action strength.  Diagnosis is retained as the category on both
+    boundary tokens so truncation never leaves an unlabeled time interval.
+    """
+
+    if max_tokens < 4:
+        raise ValueError("max_tokens must be at least 4")
+    validate_enhance_script(script)
+    preserve = script["preserve"]
+    duration = float(script["duration_ms"])
+    result: list[tuple[int, int, float]] = [
+        (5, 1, float(preserve["speech_content"])),
+        (6, 1, float(preserve["speaker_identity"])),
+        (7, 1, float(preserve["prosody"])),
+    ]
+    for index, segment in enumerate(script["segments"]):
+        field = 20 + 3 * index
+        diagnosis = _category(segment["diagnosis"])
+        result.extend(
+            [
+                (field, diagnosis, float(segment["start_ms"]) / duration),
+                (field + 1, diagnosis, float(segment["end_ms"]) / duration),
+                (field + 2, _category(segment["action"]), float(segment["strength"])),
+            ]
+        )
+        if len(result) >= max_tokens:
             break
     result.extend([(0, 0, 0.0)] * (max_tokens - len(result)))
     return result[:max_tokens]

@@ -1,5 +1,24 @@
 # Run Manifest — LSE 2.0
 
+## v6 StepAudio 3-inspired MM-DiT 正式运行（2026-09-17）
+
+状态：**AutoDL 四级门禁、12,000-step 正式训练与 200 条六臂评测全部完成。**
+
+| 项目 | 状态 |
+| --- | --- |
+| 分支 | `feat/stepaudio3-v6-prep`，未提交、未推送 |
+| 设计 | no-op 初始化、MR-STFT、WavLM semantic、curriculum、EnhanceScript、Adaptive Planning |
+| 本地闭环 | 2-step smoke + checkpoint + 五臂评测接口通过 |
+| GPU 训练 | 51,717,122 参数；12,000 step；best=11,750；三阶段完成 |
+| 退化子集结果 | oracle−none +0.258 dB；predicted−none +0.216 dB；两者 95% CI > 0 |
+| 安全边界 | predicted corrupted fallback 70.6%；PESQ/STOI 未超过 DeepFilterNet3 |
+| 回归 | 160 项 pytest 通过；v6 修改范围 Ruff/compileall 通过 |
+| AutoDL 入口 | `scripts/autodl_mmdit_v6_run.sh` |
+| 证据边界 | 条件因果作用成立；绝对增益小，消融和多 action Planner 尚未完成 |
+
+详见 `docs/MMDIT_V6_AUTODL_EXECUTION_REPORT_20260917.md`、
+`docs/MMDIT_V6_LOCAL_PREPARATION_INVENTORY_ZH.md` 与 `docs/MMDIT_V6_AUTODL_RUNBOOK_ZH.md`。
+
 ## 4.1 GRPO recovery（2026-09-09）
 
 状态：**RTX 3080 Ti 12GB 正式 300-step 训练、完整测试推理、DSP 泛化评测和晋升门禁均已通过。**
